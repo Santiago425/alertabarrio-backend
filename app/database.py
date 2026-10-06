@@ -16,6 +16,9 @@ def _make_engine(url: str):
     # Neon / Render a veces entregan "postgres://", SQLAlchemy necesita "postgresql://"
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    # SQLAlchemy 2.1 usa psycopg 3 por defecto con "postgresql://"; usamos psycopg2
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     kwargs = {"pool_pre_ping": True}
     if url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}
