@@ -1,0 +1,21 @@
+# Los planes gratis de Render "duermen" el servicio tras 15 min sin uso.
+# Este workflow lo despierta cada 10 minutos para que el dia de la
+# sustentacion no toque decir "profe, espere que el servidor esta dormido".
+# Configurar en Settings > Secrets and variables > Actions > Variables:
+#   BACKEND_URL = https://tu-backend.onrender.com
+#   AI_URL      = https://tu-ia.onrender.com
+name: Mantener servidores despiertos
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend e IA
+        run: |
+          [ -n "${{ vars.BACKEND_URL }}" ] && curl -fsS --max-time 60 "${{ vars.BACKEND_URL }}/api/v1/hello" || true
+          [ -n "${{ vars.AI_URL }}" ] && curl -fsS --max-time 60 "${{ vars.AI_URL }}/health" || true

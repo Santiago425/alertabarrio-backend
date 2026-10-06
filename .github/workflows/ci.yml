@@ -1,0 +1,57 @@
+name: CI backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: alerta
+          POSTGRES_PASSWORD: alerta
+          POSTGRES_DB: alertabarrio_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U alerta" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg2://alerta:alerta@localhost:5432/alertabarrio_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check app tests
+      - name: Pruebas (estructuras + API contra PostgreSQL)
+        run: pytest -q
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen Docker
+        run: docker build -t alertabarrio-backend .
+      - name: Publicar en GitHub Container Registry (solo main)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:latest
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker tag alertabarrio-backend $IMAGE
+          docker push $IMAGE
+      - name: Desplegar en Render (si existe el deploy hook)
+        if: github.ref == 'refs/heads/main'
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then curl -fsS -X POST "$RENDER_DEPLOY_HOOK"; else echo "Sin RENDER_DEPLOY_HOOK, se omite"; fi
