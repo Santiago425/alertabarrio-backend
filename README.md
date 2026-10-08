@@ -50,8 +50,6 @@ pytest                      # usa SQLite temporal si no hay DATABASE_URL
 
 Con Docker: `docker build -t alertabarrio-backend . && docker run -p 8000:8000 --env-file .env alertabarrio-backend`
 
-Diagrama entidad-relación: ver `alertabarrio-database/er_diagram.png`.
+Diagrama entidad-relación: [`database/er_diagram.png`](database/er_diagram.png).
 
-   Revisado por Neber Melo: despliegue del backend en Render. 
-
-g
+   Revisado por Neber Melo: despliegue del backend en Render.
