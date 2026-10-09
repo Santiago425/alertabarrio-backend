@@ -37,6 +37,17 @@ tests/            test_structures.py, test_api.py
 | GET | `/api/v1/neighborhoods/ranking` | quick sort |
 | GET | `/api/v1/ai/heatmap`, `/api/v1/ai/daily-summary` | llaman al componente de IA |
 | GET | `/api/v1/ds/state` | estado interno de todas las estructuras |
+| GET | `/health` | — (estado del servicio y si las estructuras están cargadas) |
+| GET | `/api/v1/neighborhoods`, `/api/v1/neighborhoods/connections` | — (consulta a la base de datos) |
+| GET | `/api/v1/incident-types` | — (catálogo ordenado por gravedad) |
+| GET | `/api/v1/moderation/in-review` | — (reportes en revisión, por prioridad) |
+| POST | `/api/v1/moderation/reports/{id}/review` | PriorityQueue (saca un reporte específico del heap en O(log n)) |
+| POST | `/api/v1/moderation/reports/{id}/reject` | PriorityQueue + Stack (registra el cambio de estado) |
+| GET, POST, DELETE | `/api/v1/subscriptions/me`, `/api/v1/subscriptions/{neighborhood_id}` | HashTable + LinkedList (vecinos suscritos por barrio) |
+| GET | `/api/v1/notifications/me` | — (últimas 100 notificaciones del usuario) |
+| POST | `/api/v1/notifications/{id}/read` | — (marca una notificación como leída) |
+| POST | `/api/v1/notifications/dispatch` | Queue (despacha las notificaciones pendientes) |
+| GET | `/api/v1/ai/status`, `/api/v1/ai/hotspots` | llaman al componente de IA |
 
 ## Correr en local
 
