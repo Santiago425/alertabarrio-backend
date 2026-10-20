@@ -254,3 +254,18 @@ def test_migrate_existing_bogota_database_to_pasto(tmp_path):
         assert db.scalars(select(models.Notification)).one().message == "Nueva alerta en Centro: Hurto"
         roads = db.scalars(select(models.NeighborhoodConnection)).all()
         assert roads == []  # la via vieja de Bogota se borra; Centro y Lorenzo de Aldana no tienen via directa
+
+
+def test_ai_status_reports_available_flag(monkeypatch):
+    from app.services import ai_client
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"available": {"classifier": ["naive_bayes"]}, "classifier": "naive_bayes"}
+
+    monkeypatch.setattr(ai_client.httpx, "get", lambda *a, **k: FakeResp())
+    st = ai_client.status()
+    assert st["available"] is True and st["options"] == {"classifier": ["naive_bayes"]} and st["classifier"] == "naive_bayes"

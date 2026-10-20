@@ -72,6 +72,9 @@ def status() -> dict:
     try:
         r = httpx.get(settings.ai_service_url.rstrip("/") + "/api/v1/models", timeout=5)
         r.raise_for_status()
-        return {"available": True, **r.json()}
+        data = r.json()
+        # el componente de IA llama "available" a la lista de modelos que tiene;
+        # aca "available" significa "la IA responde", y la lista va en "options"
+        return {**data, "options": data.get("available"), "available": True}
     except (httpx.HTTPError, ValueError) as exc:
         return {"available": False, "error": str(exc)}
