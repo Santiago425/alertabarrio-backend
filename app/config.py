@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 12
 
+    # Costo de bcrypt (2^rounds iteraciones). 12 tarda ~0.25 s por intento.
+    bcrypt_rounds: int = 12
+    # Intentos fallidos de login permitidos antes de bloquear el correo
+    login_max_attempts: int = 5
+    login_lock_minutes: int = 10
+
+    # Ciudad que muestra la app
+    city: str = "Pasto"
+
     # URL del componente de IA (servicio separado)
     ai_service_url: str = "http://localhost:8001"
     ai_timeout_seconds: float = 20.0

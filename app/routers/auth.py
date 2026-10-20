@@ -4,7 +4,15 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
-from ..security import create_access_token, get_current_user, hash_password, verify_password
+from ..security import (
+    burn_password_check,
+    create_access_token,
+    get_current_user,
+    hash_password,
+    login_throttle,
+    needs_rehash,
+    verify_password,
+)
 from ..serializers import user_out
 from ..services.engine import engine
 
@@ -41,12 +49,41 @@ def register(data: schemas.RegisterIn, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=schemas.TokenOut)
 def login(data: schemas.LoginIn, db: Session = Depends(get_db)):
-    user = db.scalar(select(models.User).where(models.User.email == data.email.lower()))
+    email = data.email.lower()
+    locked = login_throttle.seconds_locked(email)
+    if locked:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Demasiados intentos fallidos. Intenta de nuevo en {max(1, locked // 60)} min",
+            headers={"Retry-After": str(locked)},
+        )
+    user = db.scalar(select(models.User).where(models.User.email == email))
+    if user is None:
+        burn_password_check(data.password)
     if user is None or not verify_password(data.password, user.password_hash):
+        login_throttle.fail(email)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Correo o contrasena incorrectos")
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "La cuenta esta desactivada")
+    login_throttle.reset(email)
+    if needs_rehash(user.password_hash):
+        user.password_hash = hash_password(data.password)
+        db.commit()
     return schemas.TokenOut(access_token=create_access_token(user), user=user_out(user))
+
+
+@router.post("/change-password", status_code=204)
+def change_password(
+    data: schemas.ChangePasswordIn,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    if not verify_password(data.current_password, user.password_hash):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La contrasena actual no es correcta")
+    if verify_password(data.new_password, user.password_hash):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La nueva contrasena debe ser distinta a la actual")
+    user.password_hash = hash_password(data.new_password)
+    db.commit()
 
 
 @router.get("/me", response_model=schemas.UserOut)

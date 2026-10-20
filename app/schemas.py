@@ -3,7 +3,9 @@
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from .security import validate_password_strength
 
 
 class ORM(BaseModel):
@@ -14,14 +16,29 @@ class ORM(BaseModel):
 class RegisterIn(BaseModel):
     full_name: str = Field(min_length=3, max_length=120)
     email: EmailStr
-    password: str = Field(min_length=6, max_length=72)
+    password: str = Field(max_length=72)
     phone: Optional[str] = Field(default=None, max_length=30)
     neighborhood_id: Optional[int] = None
+
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class LoginIn(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(max_length=200)
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_password: str = Field(max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def strong_password(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class NeighborhoodOut(ORM):

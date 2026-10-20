@@ -24,6 +24,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
+    if settings.jwt_secret == "cambiar-este-secreto-en-produccion":
+        logging.getLogger("alertabarrio").warning(
+            "JWT_SECRET tiene el valor por defecto: configura uno largo y secreto en produccion"
+        )
     init_db(with_seed=settings.seed_on_startup)
     db = SessionLocal()
     try:

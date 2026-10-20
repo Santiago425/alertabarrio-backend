@@ -2,7 +2,10 @@
 
 API REST en **Python + FastAPI** sobre **PostgreSQL**. Aquí viven las estructuras de datos del proyecto (`app/structures/`), implementadas por nosotros y usadas por `AlertEngine` (`app/services/engine.py`).
 
+Ciudad: **San Juan de Pasto** (14 barrios con sus vías para la ruta segura).
+
 - `GET /api/v1/hello` → hola mundo + integrantes
+- `GET /api/v1/stats` → números del dashboard
 - Swagger: `/docs`
 
 ## Estructura
@@ -22,7 +25,7 @@ tests/            test_structures.py, test_api.py
 
 | Método | Ruta | Estructura |
 |---|---|---|
-| POST | `/api/v1/auth/register`, `/api/v1/auth/login` | — (bcrypt + JWT) |
+| POST | `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/change-password` | — (bcrypt + JWT) |
 | POST | `/api/v1/reports` | ciclo completo con IA → PriorityQueue + AVL + Stack |
 | GET | `/api/v1/feed?neighborhood_id=` | LinkedList / merge sort |
 | GET | `/api/v1/reports?from=&to=` | AVL (rango por fecha) |
@@ -37,6 +40,15 @@ tests/            test_structures.py, test_api.py
 | GET | `/api/v1/neighborhoods/ranking` | quick sort |
 | GET | `/api/v1/ai/heatmap`, `/api/v1/ai/daily-summary` | llaman al componente de IA |
 | GET | `/api/v1/ds/state` | estado interno de todas las estructuras |
+
+## Seguridad de las contraseñas
+
+- **Nunca se guardan en texto plano.** Se guarda un hash **bcrypt** con costo 12 (2¹² rondas) y sal aleatoria por usuario: dos cuentas con la misma contraseña tienen hashes distintos y el hash no se puede revertir.
+- **Contraseña fuerte obligatoria:** mínimo 8 caracteres, mayúscula, minúscula, número y símbolo (`validate_password_strength` en `app/security.py`).
+- **Bloqueo por intentos:** 5 intentos fallidos seguidos bloquean ese correo 10 minutos (responde `429`).
+- **Sin pistas:** si el correo no existe se hace igual un bcrypt, así la respuesta tarda lo mismo y no se puede saber qué correos están registrados.
+- **Rehash automático:** si se sube `BCRYPT_ROUNDS`, el hash de cada usuario se actualiza solo la próxima vez que inicia sesión.
+- En producción hay que poner un `JWT_SECRET` largo y secreto (si queda el de ejemplo, el backend lo avisa en el log).
 
 ## Correr en local
 

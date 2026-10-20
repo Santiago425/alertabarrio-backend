@@ -1,7 +1,23 @@
-"""Hash de contrasenas (bcrypt) y tokens JWT para el login."""
+"""
+Seguridad del login: hash de contrasenas con bcrypt y tokens JWT.
 
+Las contrasenas NUNCA se guardan en texto plano. bcrypt es una funcion de
+hash lenta a proposito y con "sal" aleatoria por usuario:
+    - la misma contrasena da un hash distinto en cada cuenta (la sal),
+    - probar millones de contrasenas cuesta mucho tiempo (el costo, 2^12 rondas),
+    - el hash no se puede "desencriptar": para entrar se vuelve a calcular y se compara.
+
+Ademas:
+    - se exige una contrasena fuerte (ver validate_password_strength),
+    - tras varios intentos fallidos el correo queda bloqueado unos minutos,
+    - si el costo configurado sube, el hash se actualiza solo al iniciar sesion.
+"""
+
+import re
+import threading
+import time
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Dict, List, Optional
 
 import bcrypt
 import jwt
@@ -16,8 +32,38 @@ from .models import User
 bearer = HTTPBearer(auto_error=False)
 
 
+# bcrypt solo usa los primeros 72 bytes; una tilde o una ñ ocupan 2 bytes.
+MAX_PASSWORD_BYTES = 72
+
+
+def password_problems(password: str) -> List[str]:
+    """Lista de requisitos que la contrasena NO cumple (vacia = contrasena valida)."""
+    problems = []
+    if len(password) < 8:
+        problems.append("tener al menos 8 caracteres")
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        problems.append(f"tener maximo {MAX_PASSWORD_BYTES} bytes")
+    if not re.search(r"[a-zñáéíóú]", password):
+        problems.append("tener una letra minuscula")
+    if not re.search(r"[A-ZÑÁÉÍÓÚ]", password):
+        problems.append("tener una letra mayuscula")
+    if not re.search(r"\d", password):
+        problems.append("tener un numero")
+    if not re.search(r"[^\w\s]|_", password):
+        problems.append("tener un simbolo (por ejemplo * . ! #)")
+    return problems
+
+
+def validate_password_strength(password: str) -> str:
+    problems = password_problems(password)
+    if problems:
+        raise ValueError("La contrasena debe " + ", ".join(problems))
+    return password
+
+
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    rounds = get_settings().bcrypt_rounds
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
@@ -25,6 +71,62 @@ def verify_password(password: str, password_hash: str) -> bool:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except ValueError:
         return False
+
+
+def needs_rehash(password_hash: str) -> bool:
+    """True si el hash se hizo con menos rondas que las configuradas ahora."""
+    try:
+        return int(password_hash.split("$")[2]) < get_settings().bcrypt_rounds
+    except (IndexError, ValueError):
+        return True
+
+
+_DUMMY_HASH: Optional[str] = None
+
+
+def burn_password_check(password: str) -> None:
+    """
+    Hace un bcrypt "de mentira" cuando el correo no existe, para que la
+    respuesta tarde lo mismo y no se pueda adivinar que correos estan registrados.
+    """
+    global _DUMMY_HASH
+    if _DUMMY_HASH is None:
+        _DUMMY_HASH = hash_password("cuenta-que-no-existe")
+    verify_password(password, _DUMMY_HASH)
+
+
+class LoginThrottle:
+    """Bloquea un correo unos minutos despues de varios intentos fallidos seguidos."""
+
+    def __init__(self) -> None:
+        self._failures: Dict[str, List[float]] = {}
+        self._lock = threading.Lock()
+
+    def _recent(self, key: str, now: float) -> List[float]:
+        window = get_settings().login_lock_minutes * 60
+        attempts = [t for t in self._failures.get(key, []) if now - t < window]
+        self._failures[key] = attempts
+        return attempts
+
+    def seconds_locked(self, key: str) -> int:
+        settings = get_settings()
+        now = time.monotonic()
+        with self._lock:
+            attempts = self._recent(key, now)
+            if len(attempts) < settings.login_max_attempts:
+                return 0
+            return max(1, int(attempts[0] + settings.login_lock_minutes * 60 - now))
+
+    def fail(self, key: str) -> None:
+        with self._lock:
+            self._recent(key, time.monotonic()).append(time.monotonic())
+
+    def reset(self, key: str) -> None:
+        with self._lock:
+            self._failures.pop(key, None)
+
+
+login_throttle = LoginThrottle()
 
 
 def create_access_token(user: User) -> str:
