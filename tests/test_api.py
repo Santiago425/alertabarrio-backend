@@ -282,11 +282,13 @@ def test_ai_chat_sends_real_context(client, monkeypatch):
 
     monkeypatch.setattr(ai_client, "_post", fake_post)
     ana = login(client, "ana@alertabarrio.co")
-    r = client.post("/api/v1/ai/chat", headers=ana, json={"question": "¿Es seguro mi barrio?"})
+    history = [{"role": "user", "text": "me robaron en Pandiaco"}, {"role": "assistant", "text": "Lo siento."}]
+    r = client.post("/api/v1/ai/chat", headers=ana, json={"question": "¿Es seguro mi barrio?", "history": history})
     assert r.status_code == 200 and r.json() == {"available": True, "answer": "Evita el Centro de noche.", "model": "gemini:gemini-2.5-flash"}
     ctx = sent["payload"]["context"]
     assert sent["path"] == "/api/v1/chat" and ctx["city"] == "Pasto" and ctx["neighborhood"] == "Centro"
     assert ctx["ranking"] and ctx["hotspots"] and ctx["recent"]
+    assert "Pandiaco" in ctx["neighborhoods"] and sent["payload"]["history"] == history
 
 
 def test_ai_chat_when_ai_is_down(client):
