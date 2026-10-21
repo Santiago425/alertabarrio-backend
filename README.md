@@ -39,6 +39,7 @@ tests/            test_structures.py, test_api.py
 | GET | `/api/v1/neighborhoods/search?name=` | búsqueda binaria |
 | GET | `/api/v1/neighborhoods/ranking` | quick sort |
 | GET | `/api/v1/ai/heatmap`, `/api/v1/ai/daily-summary` | llaman al componente de IA |
+| POST | `/api/v1/ai/chat` | asistente: pregunta del vecino + datos reales (ranking, horas de riesgo, alertas recientes) → IA (Gemini) |
 | GET | `/api/v1/ds/state` | estado interno de todas las estructuras |
 
 ## Seguridad de las contraseñas

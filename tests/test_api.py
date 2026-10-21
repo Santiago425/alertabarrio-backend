@@ -269,3 +269,26 @@ def test_ai_status_reports_available_flag(monkeypatch):
     monkeypatch.setattr(ai_client.httpx, "get", lambda *a, **k: FakeResp())
     st = ai_client.status()
     assert st["available"] is True and st["options"] == {"classifier": ["naive_bayes"]} and st["classifier"] == "naive_bayes"
+
+
+def test_ai_chat_sends_real_context(client, monkeypatch):
+    from app.services import ai_client
+
+    sent = {}
+
+    def fake_post(path, payload):
+        sent.update(path=path, payload=payload)
+        return {"model": "gemini:gemini-2.5-flash", "answer": "Evita el Centro de noche."}, 5
+
+    monkeypatch.setattr(ai_client, "_post", fake_post)
+    ana = login(client, "ana@alertabarrio.co")
+    r = client.post("/api/v1/ai/chat", headers=ana, json={"question": "¿Es seguro mi barrio?"})
+    assert r.status_code == 200 and r.json() == {"available": True, "answer": "Evita el Centro de noche.", "model": "gemini:gemini-2.5-flash"}
+    ctx = sent["payload"]["context"]
+    assert sent["path"] == "/api/v1/chat" and ctx["city"] == "Pasto" and ctx["neighborhood"] == "Centro"
+    assert ctx["ranking"] and ctx["hotspots"] and ctx["recent"]
+
+
+def test_ai_chat_when_ai_is_down(client):
+    r = client.post("/api/v1/ai/chat", json={"question": "hola"})
+    assert r.status_code == 200 and r.json()["available"] is False
