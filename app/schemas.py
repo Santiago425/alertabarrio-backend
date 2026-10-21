@@ -215,3 +215,15 @@ class RouteOut(BaseModel):
     fewest_hops_path: List[NeighborhoodOut]
     avoided: List[Dict[str, Any]]
     explanation: str
+
+
+# ------------------------------------------------------------- asistente IA
+class ChatIn(BaseModel):
+    question: str = Field(min_length=2, max_length=500)
+    neighborhood_id: Optional[int] = None
+
+
+class ChatOut(BaseModel):
+    available: bool
+    answer: str
+    model: str

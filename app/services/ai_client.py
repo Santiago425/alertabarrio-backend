@@ -67,6 +67,12 @@ def summary(db: Session, payload: dict, neighborhood_id: int) -> Optional[dict]:
     return result
 
 
+def chat(db: Session, payload: dict, neighborhood_id: Optional[int]) -> Optional[dict]:
+    result, latency = _post("/api/v1/chat", payload)
+    _log(db, "chat", None if result is None else {"model": result.get("model")}, latency, neighborhood_id=neighborhood_id)
+    return result
+
+
 def status() -> dict:
     settings = get_settings()
     try:
