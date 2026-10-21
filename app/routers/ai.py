@@ -270,6 +270,7 @@ def chat(
     recent = reports_in_order(db, engine.feed_ids(hood.id if hood else None, 8))
     payload = {
         "question": data.question.strip(),
+        "history": [h.model_dump() for h in data.history],
         "context": {
             "city": get_settings().city,
             "neighborhood": hood.name if hood else None,

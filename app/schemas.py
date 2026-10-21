@@ -237,9 +237,15 @@ class RouteOut(BaseModel):
 
 
 # ------------------------------------------------------------- asistente IA
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(max_length=1500)
+
+
 class ChatIn(BaseModel):
     question: str = Field(min_length=2, max_length=500)
     neighborhood_id: Optional[int] = None
+    history: List[ChatTurn] = Field(default=[], max_length=12)
 
 
 class ChatOut(BaseModel):
