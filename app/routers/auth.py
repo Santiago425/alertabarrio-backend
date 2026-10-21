@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,9 +11,13 @@ from ..security import (
     create_access_token,
     get_current_user,
     hash_password,
+    limit_auth_requests,
     login_throttle,
     needs_rehash,
+    new_totp_secret,
+    totp_uri,
     verify_password,
+    verify_totp,
 )
 from ..serializers import user_out
 from ..services.engine import engine
@@ -19,7 +25,11 @@ from ..services.engine import engine
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=schemas.TokenOut, status_code=201)
+# Mensaje que el frontend usa para mostrar el paso del codigo de verificacion
+TWO_FACTOR_REQUIRED = "Ingresa el codigo de tu app de autenticacion"
+
+
+@router.post("/register", response_model=schemas.TokenOut, status_code=201, dependencies=[Depends(limit_auth_requests)])
 def register(data: schemas.RegisterIn, db: Session = Depends(get_db)):
     email = data.email.lower()
     if db.scalar(select(models.User).where(models.User.email == email)):
@@ -47,7 +57,7 @@ def register(data: schemas.RegisterIn, db: Session = Depends(get_db)):
     return schemas.TokenOut(access_token=create_access_token(user), user=user_out(user))
 
 
-@router.post("/login", response_model=schemas.TokenOut)
+@router.post("/login", response_model=schemas.TokenOut, dependencies=[Depends(limit_auth_requests)])
 def login(data: schemas.LoginIn, db: Session = Depends(get_db)):
     email = data.email.lower()
     locked = login_throttle.seconds_locked(email)
@@ -65,10 +75,17 @@ def login(data: schemas.LoginIn, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Correo o contrasena incorrectos")
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "La cuenta esta desactivada")
+    if user.totp_enabled:
+        if not data.otp:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, TWO_FACTOR_REQUIRED, headers={"X-2FA-Required": "true"})
+        if not verify_totp(user.totp_secret, data.otp):
+            login_throttle.fail(email)
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "El codigo de verificacion no es correcto", headers={"X-2FA-Required": "true"})
     login_throttle.reset(email)
     if needs_rehash(user.password_hash):
         user.password_hash = hash_password(data.password)
-        db.commit()
+    user.last_login_at = datetime.now(timezone.utc)
+    db.commit()
     return schemas.TokenOut(access_token=create_access_token(user), user=user_out(user))
 
 
@@ -88,4 +105,46 @@ def change_password(
 
 @router.get("/me", response_model=schemas.UserOut)
 def me(user: models.User = Depends(get_current_user)):
+    return user_out(user)
+
+
+# ------------------------------------------------------------------ sesiones
+@router.post("/logout-all", response_model=schemas.TokenOut)
+def logout_all(db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    """Cierra la sesion en todos los dispositivos; este recibe un token nuevo."""
+    user.token_version += 1
+    db.commit()
+    return schemas.TokenOut(access_token=create_access_token(user), user=user_out(user))
+
+
+# ------------------------------------------------------------------ verificacion en dos pasos
+@router.post("/2fa/setup", response_model=schemas.TwoFactorSetupOut)
+def two_factor_setup(db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    if user.totp_enabled:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La verificacion en dos pasos ya esta activa")
+    user.totp_secret = new_totp_secret()
+    db.commit()
+    return schemas.TwoFactorSetupOut(secret=user.totp_secret, otpauth_uri=totp_uri(user.totp_secret, user.email))
+
+
+@router.post("/2fa/enable", response_model=schemas.UserOut)
+def two_factor_enable(data: schemas.TwoFactorCodeIn, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    if not user.totp_secret:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Primero genera el codigo QR")
+    if not verify_totp(user.totp_secret, data.code):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El codigo no es correcto, revisa la hora de tu celular")
+    user.totp_enabled = True
+    db.commit()
+    return user_out(user)
+
+
+@router.post("/2fa/disable", response_model=schemas.UserOut)
+def two_factor_disable(data: schemas.TwoFactorDisableIn, db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    if not user.totp_enabled:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La verificacion en dos pasos no esta activa")
+    if not verify_password(data.password, user.password_hash) or not verify_totp(user.totp_secret, data.code):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La contrasena o el codigo no son correctos")
+    user.totp_enabled = False
+    user.totp_secret = None
+    db.commit()
     return user_out(user)

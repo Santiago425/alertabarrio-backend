@@ -10,10 +10,18 @@ hash lenta a proposito y con "sal" aleatoria por usuario:
 Ademas:
     - se exige una contrasena fuerte (ver validate_password_strength),
     - tras varios intentos fallidos el correo queda bloqueado unos minutos,
-    - si el costo configurado sube, el hash se actualiza solo al iniciar sesion.
+    - si el costo configurado sube, el hash se actualiza solo al iniciar sesion,
+    - cada IP tiene un limite de solicitudes de login/registro por minuto,
+    - verificacion en dos pasos opcional con una app de autenticacion (TOTP),
+    - se pueden cerrar todas las sesiones abiertas (token_version en el JWT).
 """
 
+import base64
+import hashlib
+import hmac
 import re
+import secrets
+import struct
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -21,7 +29,7 @@ from typing import Dict, List, Optional
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -129,11 +137,88 @@ class LoginThrottle:
 login_throttle = LoginThrottle()
 
 
+class RateLimiter:
+    """Ventana deslizante por IP: frena bots que prueban muchos correos distintos."""
+
+    def __init__(self) -> None:
+        self._hits: Dict[str, List[float]] = {}
+        self._lock = threading.Lock()
+
+    def hit(self, key: str, limit: int, window_s: int) -> int:
+        """Registra un intento; devuelve los segundos a esperar (0 = permitido)."""
+        now = time.monotonic()
+        with self._lock:
+            hits = [t for t in self._hits.get(key, []) if now - t < window_s]
+            if len(hits) >= limit:
+                self._hits[key] = hits
+                return max(1, int(hits[0] + window_s - now))
+            hits.append(now)
+            self._hits[key] = hits
+            return 0
+
+
+auth_rate_limiter = RateLimiter()
+
+
+def client_ip(request: Request) -> str:
+    # Render y Vercel ponen la IP real del cliente en X-Forwarded-For
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "desconocida"
+
+
+def limit_auth_requests(request: Request) -> None:
+    settings = get_settings()
+    wait = auth_rate_limiter.hit(client_ip(request), settings.auth_rate_limit, settings.auth_rate_window_seconds)
+    if wait:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Demasiadas solicitudes desde tu conexion. Espera un momento e intenta de nuevo",
+            headers={"Retry-After": str(wait)},
+        )
+
+
+# ------------------------------------------------------------------ verificacion en dos pasos (TOTP)
+# Mismo algoritmo que usan Google Authenticator, Microsoft Authenticator o Authy (RFC 6238):
+# codigo de 6 digitos que cambia cada 30 segundos, calculado con HMAC-SHA1 de un secreto compartido.
+
+TOTP_STEP = 30
+
+
+def new_totp_secret() -> str:
+    return base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
+
+
+def totp_code(secret: str, at: Optional[float] = None) -> str:
+    key = base64.b32decode(secret + "=" * (-len(secret) % 8))
+    counter = int((time.time() if at is None else at) // TOTP_STEP)
+    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    number = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    return f"{number % 1_000_000:06d}"
+
+
+def verify_totp(secret: str, code: str) -> bool:
+    """Acepta el codigo actual y el de 30 s antes o despues (por si el reloj del celular va desfasado)."""
+    code = (code or "").replace(" ", "")
+    if not (code.isdigit() and len(code) == 6):
+        return False
+    now = time.time()
+    return any(hmac.compare_digest(totp_code(secret, now + d * TOTP_STEP), code) for d in (-1, 0, 1))
+
+
+def totp_uri(secret: str, email: str) -> str:
+    return f"otpauth://totp/AlertaBarrio:{email}?secret={secret}&issuer=AlertaBarrio&digits=6&period={TOTP_STEP}"
+
+
 def create_access_token(user: User) -> str:
     settings = get_settings()
     payload = {
         "sub": str(user.id),
         "role": user.role.name,
+        "tv": user.token_version,
+        "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
@@ -157,6 +242,8 @@ def get_current_user(
     user = db.get(User, int(payload["sub"]))
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no encontrado o inactivo")
+    if payload.get("tv", 0) != user.token_version:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "La sesion se cerro. Inicia sesion de nuevo")
     return user
 
 
