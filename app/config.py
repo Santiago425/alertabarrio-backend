@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     # URL del componente de IA (servicio separado)
     ai_service_url: str = "http://localhost:8001"
     ai_timeout_seconds: float = 20.0
+    # Render (plan gratis) duerme la IA; el chat espera hasta este tiempo a que despierte
+    ai_wake_seconds: float = 45.0
 
     # Origenes permitidos para el frontend (CORS), separados por coma
     cors_origins: str = "*"
