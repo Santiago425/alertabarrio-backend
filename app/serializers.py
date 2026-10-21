@@ -18,6 +18,8 @@ def user_out(user: models.User) -> schemas.UserOut:
         role=user.role.name,
         neighborhood=schemas.NeighborhoodOut.model_validate(user.neighborhood) if user.neighborhood else None,
         created_at=ensure_aware(user.created_at),
+        two_factor_enabled=bool(user.totp_enabled),
+        last_login_at=ensure_aware(user.last_login_at) if user.last_login_at else None,
     )
 
 

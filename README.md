@@ -26,6 +26,7 @@ tests/            test_structures.py, test_api.py
 | Método | Ruta | Estructura |
 |---|---|---|
 | POST | `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/change-password` | — (bcrypt + JWT) |
+| POST | `/api/v1/auth/2fa/setup`, `/api/v1/auth/2fa/enable`, `/api/v1/auth/2fa/disable`, `/api/v1/auth/logout-all` | — (verificación en dos pasos TOTP y cierre de todas las sesiones) |
 | POST | `/api/v1/reports` | ciclo completo con IA → PriorityQueue + AVL + Stack |
 | GET | `/api/v1/feed?neighborhood_id=` | LinkedList / merge sort |
 | GET | `/api/v1/reports?from=&to=` | AVL (rango por fecha) |

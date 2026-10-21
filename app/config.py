@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Intentos fallidos de login permitidos antes de bloquear el correo
     login_max_attempts: int = 5
     login_lock_minutes: int = 10
+    # Solicitudes de login/registro permitidas por IP en la ventana
+    auth_rate_limit: int = 20
+    auth_rate_window_seconds: int = 300
 
     # Ciudad que muestra la app
     city: str = "Pasto"

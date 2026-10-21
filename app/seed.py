@@ -13,7 +13,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, inspect, select, text
 from sqlalchemy.orm import Session
 
 from . import models
@@ -383,8 +383,29 @@ def migrate_to_pasto(db: Session) -> bool:
     return True
 
 
+# Columnas que se agregaron despues de crear la tabla en produccion
+NEW_USER_COLUMNS = {
+    "token_version": "INTEGER NOT NULL DEFAULT 0",
+    "totp_secret": "VARCHAR(64)",
+    "totp_enabled": "BOOLEAN NOT NULL DEFAULT false",
+    "last_login_at": "TIMESTAMP WITH TIME ZONE",
+}
+
+
+def add_missing_columns() -> None:
+    """create_all no altera tablas existentes: agregamos a mano las columnas nuevas."""
+    existing = {c["name"] for c in inspect(db_engine).get_columns("users")}
+    with db_engine.begin() as conn:
+        for name, ddl in NEW_USER_COLUMNS.items():
+            if name not in existing:
+                if db_engine.dialect.name == "sqlite":
+                    ddl = ddl.replace("TIMESTAMP WITH TIME ZONE", "DATETIME").replace("DEFAULT false", "DEFAULT 0")
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {name} {ddl}"))
+
+
 def init_db(with_seed: bool = True) -> None:
     Base.metadata.create_all(bind=db_engine)
+    add_missing_columns()
     db = SessionLocal()
     try:
         if with_seed:

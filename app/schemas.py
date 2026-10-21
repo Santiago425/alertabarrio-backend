@@ -29,6 +29,21 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(max_length=200)
+    otp: Optional[str] = Field(default=None, max_length=10)
+
+
+class TwoFactorSetupOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class TwoFactorCodeIn(BaseModel):
+    code: str = Field(min_length=6, max_length=10)
+
+
+class TwoFactorDisableIn(BaseModel):
+    password: str = Field(max_length=200)
+    code: str = Field(min_length=6, max_length=10)
 
 
 class ChangePasswordIn(BaseModel):
@@ -57,6 +72,8 @@ class UserOut(ORM):
     role: str
     neighborhood: Optional[NeighborhoodOut] = None
     created_at: datetime
+    two_factor_enabled: bool = False
+    last_login_at: Optional[datetime] = None
 
 
 class TokenOut(BaseModel):

@@ -10,6 +10,7 @@ os.environ.setdefault("AI_SERVICE_URL", "http://ai-no-disponible.invalid")
 os.environ.setdefault("AI_TIMEOUT_SECONDS", "1")
 # bcrypt con pocas rondas para que las pruebas sean rapidas
 os.environ.setdefault("BCRYPT_ROUNDS", "4")
+os.environ.setdefault("AUTH_RATE_LIMIT", "1000")
 
 import pytest
 from fastapi.testclient import TestClient

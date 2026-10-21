@@ -86,6 +86,12 @@ class User(Base):
     neighborhood_id: Mapped[Optional[int]] = mapped_column(ForeignKey("neighborhoods.id"))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Seguridad: al subir token_version se invalidan todas las sesiones abiertas
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    # Verificacion en dos pasos (TOTP, compatible con Google Authenticator)
+    totp_secret: Mapped[Optional[str]] = mapped_column(String(64))
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     role: Mapped[Role] = relationship(back_populates="users", lazy="joined")
     neighborhood: Mapped[Optional[Neighborhood]] = relationship(lazy="joined")

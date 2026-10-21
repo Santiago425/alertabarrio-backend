@@ -292,3 +292,56 @@ def test_ai_chat_sends_real_context(client, monkeypatch):
 def test_ai_chat_when_ai_is_down(client):
     r = client.post("/api/v1/ai/chat", json={"question": "hola"})
     assert r.status_code == 200 and r.json()["available"] is False
+
+
+def _new_user(client, email: str) -> dict:
+    r = client.post("/api/v1/auth/register", json={"full_name": "Prueba Segura", "email": email, "password": "Segura.2026"})
+    assert r.status_code == 201, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+def test_two_factor_login_flow(client):
+    from app.security import totp_code
+
+    h = _new_user(client, "dospasos@test.co")
+    setup = client.post("/api/v1/auth/2fa/setup", headers=h).json()
+    assert setup["otpauth_uri"].startswith("otpauth://totp/AlertaBarrio:")
+    assert client.post("/api/v1/auth/2fa/enable", headers=h, json={"code": "000000"}).status_code == 400
+    r = client.post("/api/v1/auth/2fa/enable", headers=h, json={"code": totp_code(setup["secret"])})
+    assert r.status_code == 200 and r.json()["two_factor_enabled"] is True
+
+    creds = {"email": "dospasos@test.co", "password": "Segura.2026"}
+    r = client.post("/api/v1/auth/login", json=creds)
+    assert r.status_code == 401 and r.headers.get("X-2FA-Required") == "true"
+    assert client.post("/api/v1/auth/login", json={**creds, "otp": "123456"}).status_code == 401
+    r = client.post("/api/v1/auth/login", json={**creds, "otp": totp_code(setup["secret"])})
+    assert r.status_code == 200 and r.json()["user"]["last_login_at"]
+
+    h2 = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    off = client.post("/api/v1/auth/2fa/disable", headers=h2, json={"password": "Segura.2026", "code": totp_code(setup["secret"])})
+    assert off.status_code == 200 and off.json()["two_factor_enabled"] is False
+    assert client.post("/api/v1/auth/login", json=creds).status_code == 200
+
+
+def test_logout_all_invalidates_old_tokens(client):
+    old = _new_user(client, "sesiones@test.co")
+    assert client.get("/api/v1/auth/me", headers=old).status_code == 200
+    r = client.post("/api/v1/auth/logout-all", headers=old)
+    assert r.status_code == 200
+    assert client.get("/api/v1/auth/me", headers=old).status_code == 401
+    new = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert client.get("/api/v1/auth/me", headers=new).status_code == 200
+
+
+def test_rate_limiter_and_security_headers(client):
+    from app.security import RateLimiter, totp_code, verify_totp
+
+    limiter = RateLimiter()
+    assert [limiter.hit("1.2.3.4", 3, 60) for _ in range(3)] == [0, 0, 0]
+    assert limiter.hit("1.2.3.4", 3, 60) > 0
+    assert limiter.hit("5.6.7.8", 3, 60) == 0
+    # vector de prueba del RFC 6238 (secreto "12345678901234567890", t = 59 s)
+    assert totp_code("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", at=59) == "287082"
+    assert not verify_totp("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "abc")
+    r = client.get("/api/v1/hello")
+    assert r.headers["X-Content-Type-Options"] == "nosniff" and r.headers["X-Frame-Options"] == "DENY"
