@@ -139,6 +139,6 @@ def test_sorting_and_binary_search():
     assert quick_sort(data, reverse=True) == sorted(data, reverse=True)
     pairs = [(1, "a"), (0, "b"), (1, "c")]
     assert merge_sort(pairs, key=lambda p: p[0], reverse=True) == [(1, "a"), (1, "c"), (0, "b")]
-    names = sorted(["Chapinero", "Kennedy", "Suba", "Usaquen"])
-    assert binary_search(names, "Suba") == 2
-    assert binary_search(names, "Bosa") is None
+    names = sorted(["Centro", "Palermo", "Pandiaco", "Torobajo"])
+    assert binary_search(names, "Pandiaco") == 2
+    assert binary_search(names, "Obrero") is None

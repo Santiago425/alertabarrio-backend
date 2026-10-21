@@ -17,7 +17,7 @@ def test_hello(client):
 def test_register_login_me(client):
     r = client.post(
         "/api/v1/auth/register",
-        json={"full_name": "Vecina Nueva", "email": "nueva@test.co", "password": "secreta123", "neighborhood_id": 1},
+        json={"full_name": "Vecina Nueva", "email": "nueva@test.co", "password": "Secreta.123", "neighborhood_id": 1},
     )
     assert r.status_code == 201, r.text
     token = r.json()["access_token"]
@@ -25,7 +25,7 @@ def test_register_login_me(client):
     assert me.json()["email"] == "nueva@test.co" and me.json()["role"] == "citizen"
     # correo repetido
     assert client.post(
-        "/api/v1/auth/register", json={"full_name": "Otra", "email": "nueva@test.co", "password": "secreta123"}
+        "/api/v1/auth/register", json={"full_name": "Otra", "email": "nueva@test.co", "password": "Secreta.123"}
     ).status_code == 409
     # contrasena mala
     assert client.post("/api/v1/auth/login", json={"email": "nueva@test.co", "password": "malamala"}).status_code == 401
@@ -46,8 +46,8 @@ def _new_report(client, headers, title="Me robaron con pistola", type_id=5, hood
             "description": "Un hombre con pistola me quito el celular frente a la tienda",
             "incident_type_id": type_id,
             "neighborhood_id": hood,
-            "latitude": 4.65,
-            "longitude": -74.06,
+            "latitude": 1.2136,
+            "longitude": -77.2811,
         },
     )
 
@@ -133,13 +133,13 @@ def test_safe_route_and_search(client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["safe_path"][0]["id"] == 2 and body["safe_path"][-1]["id"] == 12
-    assert client.get("/api/v1/neighborhoods/search", params={"name": "kennedy"}).json()["name"] == "Kennedy"
+    assert client.get("/api/v1/neighborhoods/search", params={"name": "palermo"}).json()["name"] == "Palermo"
 
 
 def test_ai_endpoints(client, ai_up):
     assert client.get("/api/v1/ai/heatmap").json()["available"] is True
     s = client.get("/api/v1/ai/daily-summary", params={"neighborhood_id": 1}).json()
-    assert s["summary_text"].startswith("Resumen de Chapinero")
+    assert s["summary_text"].startswith("Resumen de Centro")
     assert client.get("/api/v1/ai/daily-summary", params={"neighborhood_id": 1}).json()["cached"] is True
 
 
@@ -156,3 +156,116 @@ def test_ds_state(client):
     for key in ("priority_queue", "status_stacks", "zone_feeds", "notification_queue", "timeline_bst", "city_graph"):
         assert key in state
     assert state["city_graph"]["connected"] is True
+
+
+def test_weak_passwords_are_rejected(client):
+    base = {"full_name": "Vecino Debil", "email": "debil@test.co"}
+    for weak in ["Cort1*a", "sinmayuscula1*", "SINMINUSCULA1*", "SinNumero*", "SinSimbolo123", "A1*" + "ñ" * 40]:
+        r = client.post("/api/v1/auth/register", json={**base, "password": weak[:72]})
+        assert r.status_code == 422, weak
+    assert client.post("/api/v1/auth/register", json={**base, "password": "Bien.Fuerte9"}).status_code == 201
+
+
+def test_password_is_hashed_with_bcrypt(client):
+    from app.database import SessionLocal
+    from app import models
+
+    db = SessionLocal()
+    try:
+        u = db.query(models.User).filter_by(email="debil@test.co").one()
+        assert u.password_hash.startswith("$2") and "Bien.Fuerte9" not in u.password_hash
+    finally:
+        db.close()
+
+
+def test_change_password(client):
+    r = client.post("/api/v1/auth/login", json={"email": "debil@test.co", "password": "Bien.Fuerte9"})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    bad = client.post("/api/v1/auth/change-password", headers=h, json={"current_password": "otra", "new_password": "Nueva.Clave1"})
+    assert bad.status_code == 400
+    ok = client.post("/api/v1/auth/change-password", headers=h, json={"current_password": "Bien.Fuerte9", "new_password": "Nueva.Clave1"})
+    assert ok.status_code == 204
+    assert client.post("/api/v1/auth/login", json={"email": "debil@test.co", "password": "Nueva.Clave1"}).status_code == 200
+
+
+def test_login_lockout_after_failed_attempts(client):
+    from app.security import login_throttle
+
+    for _ in range(5):
+        assert client.post("/api/v1/auth/login", json={"email": "jorge@alertabarrio.co", "password": "mala"}).status_code == 401
+    # ni con la contrasena correcta entra mientras este bloqueado
+    r = client.post("/api/v1/auth/login", json={"email": "jorge@alertabarrio.co", "password": "Alerta2026*"})
+    assert r.status_code == 429 and "Retry-After" in r.headers
+    login_throttle.reset("jorge@alertabarrio.co")
+    assert client.post("/api/v1/auth/login", json={"email": "jorge@alertabarrio.co", "password": "Alerta2026*"}).status_code == 200
+
+
+def test_city_is_pasto_and_stats(client):
+    assert client.get("/api/v1/hello").json()["city"] == "Pasto"
+    hoods = client.get("/api/v1/neighborhoods").json()
+    assert {h["city"] for h in hoods} == {"Pasto"} and any(h["name"] == "Centro" for h in hoods)
+    stats = client.get("/api/v1/stats").json()
+    assert stats["total_reports"] > 100 and len(stats["timeline"]) == 14
+    assert stats["active_alerts"] == stats["by_status"]["published"] + stats["by_status"]["verified"]
+
+
+def test_migrate_existing_bogota_database_to_pasto(tmp_path):
+    """La base que ya esta en Render tiene barrios de Bogota: se pasan a Pasto sin borrar datos."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+
+    from app import models
+    from app.database import Base
+    from app.seed import migrate_to_pasto
+
+    eng = create_engine(f"sqlite:///{tmp_path / 'bogota.db'}")
+    Base.metadata.create_all(eng)
+    with Session(eng) as db:
+        role = models.Role(name="citizen", description="")
+        chap = models.Neighborhood(name="Chapinero", city="Bogota", latitude=4.6486, longitude=-74.0628)
+        kenn = models.Neighborhood(name="Kennedy", city="Bogota", latitude=4.628, longitude=-74.158)
+        it = models.IncidentType(code="theft", name="Hurto", severity_level=3, color="#f59e0b")
+        db.add_all([role, chap, kenn, it])
+        db.flush()
+        db.add(models.NeighborhoodConnection(from_neighborhood_id=chap.id, to_neighborhood_id=kenn.id, distance_meters=1, road_name="Calle 1"))
+        user = models.User(full_name="Ana", email="a@a.co", password_hash="x", role_id=role.id, neighborhood_id=chap.id)
+        db.add(user)
+        db.flush()
+        db.add(
+            models.Report(
+                user_id=user.id, neighborhood_id=chap.id, incident_type_id=it.id, title="Robo", description="Robo de celular",
+                latitude=4.6486 + 0.002, longitude=-74.0628, occurred_at=datetime.now(timezone.utc), status="published", priority_score=60,
+            )
+        )
+        db.add(models.Notification(user_id=user.id, message="Nueva alerta en Chapinero: Hurto"))
+        db.commit()
+        chap_id = chap.id
+
+        assert migrate_to_pasto(db) is True
+        assert migrate_to_pasto(db) is False  # la segunda vez no hace nada
+
+        centro = db.get(models.Neighborhood, chap_id)
+        assert (centro.name, centro.city) == ("Centro", "Pasto")
+        report = db.scalars(select(models.Report)).one()
+        assert report.neighborhood_id == chap_id and abs(report.latitude - (1.2136 + 0.0009)) < 1e-6
+        assert db.scalars(select(models.User)).one().neighborhood_id == chap_id
+        assert db.scalars(select(models.Notification)).one().message == "Nueva alerta en Centro: Hurto"
+        roads = db.scalars(select(models.NeighborhoodConnection)).all()
+        assert roads == []  # la via vieja de Bogota se borra; Centro y Lorenzo de Aldana no tienen via directa
+
+
+def test_ai_status_reports_available_flag(monkeypatch):
+    from app.services import ai_client
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"available": {"classifier": ["naive_bayes"]}, "classifier": "naive_bayes"}
+
+    monkeypatch.setattr(ai_client.httpx, "get", lambda *a, **k: FakeResp())
+    st = ai_client.status()
+    assert st["available"] is True and st["options"] == {"classifier": ["naive_bayes"]} and st["classifier"] == "naive_bayes"

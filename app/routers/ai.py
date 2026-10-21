@@ -172,6 +172,7 @@ def daily_summary(
 
     payload = {
         "neighborhood_name": neighborhood.name,
+        "city": neighborhood.city,
         "date": day.isoformat(),
         "reports": today,
         "week_reports": week,

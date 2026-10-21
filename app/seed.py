@@ -1,8 +1,8 @@
 """
 Datos de ejemplo para que el sistema arranque con informacion realista:
-barrios de Bogota, sus conexiones (grafo), tipos de incidente, usuarios de
+barrios de Pasto, sus conexiones (grafo), tipos de incidente, usuarios de
 prueba y ~3 meses de reportes historicos con PATRONES (por ejemplo, robos
-en Chapinero los jueves y viernes en la noche) para que la IA los detecte.
+en el Centro los jueves y viernes en la noche) para que la IA los detecte.
 
 Se ejecuta solo si la base de datos esta vacia.
 Uso manual:  python -m app.seed
@@ -13,7 +13,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from . import models
@@ -23,48 +23,70 @@ from .security import hash_password
 
 DEMO_PASSWORD = "Alerta2026*"
 
+CITY = "Pasto"
+
+# Barrios de San Juan de Pasto (coordenadas aproximadas del centro de cada barrio)
 NEIGHBORHOODS = [
-    ("Chapinero", 4.6486, -74.0628),
-    ("Usaquen", 4.6940, -74.0310),
-    ("Teusaquillo", 4.6380, -74.0790),
-    ("Barrios Unidos", 4.6670, -74.0750),
-    ("Suba", 4.7410, -74.0840),
-    ("Engativa", 4.7080, -74.1100),
-    ("Fontibon", 4.6780, -74.1450),
-    ("Kennedy", 4.6280, -74.1580),
-    ("Puente Aranda", 4.6150, -74.1170),
-    ("Los Martires", 4.6050, -74.0900),
-    ("Santa Fe", 4.6100, -74.0680),
-    ("La Candelaria", 4.5970, -74.0740),
-    ("Antonio Narino", 4.5880, -74.1000),
-    ("Bosa", 4.6180, -74.1900),
+    ("Centro", 1.2136, -77.2811),
+    ("Pandiaco", 1.2295, -77.2862),
+    ("Las Cuadras", 1.2188, -77.2783),
+    ("Palermo", 1.2236, -77.2742),
+    ("Torobajo", 1.2318, -77.2927),
+    ("Anganoy", 1.2163, -77.2985),
+    ("Mijitayo", 1.2068, -77.2925),
+    ("Lorenzo de Aldana", 1.1968, -77.2728),
+    ("Chapultepec", 1.2022, -77.2838),
+    ("Obrero", 1.2085, -77.2762),
+    ("Potrerillo", 1.2028, -77.2693),
+    ("San Felipe", 1.2167, -77.2848),
+    ("Santa Monica", 1.2118, -77.2668),
+    ("El Tejar", 1.2052, -77.2603),
 ]
 
 CONNECTIONS = [
-    ("Usaquen", "Chapinero", "Carrera 7"),
-    ("Usaquen", "Suba", "Calle 170"),
-    ("Chapinero", "Barrios Unidos", "Avenida Caracas"),
-    ("Chapinero", "Teusaquillo", "Calle 45"),
-    ("Chapinero", "Santa Fe", "Carrera 7"),
-    ("Suba", "Barrios Unidos", "Autopista Norte"),
-    ("Suba", "Engativa", "Avenida Ciudad de Cali"),
-    ("Barrios Unidos", "Teusaquillo", "Avenida NQS"),
-    ("Barrios Unidos", "Engativa", "Calle 80"),
-    ("Engativa", "Fontibon", "Avenida Boyaca"),
-    ("Engativa", "Teusaquillo", "Calle 26"),
-    ("Teusaquillo", "Puente Aranda", "Avenida de las Americas"),
-    ("Teusaquillo", "Los Martires", "Avenida Caracas"),
-    ("Fontibon", "Kennedy", "Avenida Boyaca"),
-    ("Fontibon", "Puente Aranda", "Calle 13"),
-    ("Kennedy", "Puente Aranda", "Avenida de las Americas"),
-    ("Kennedy", "Bosa", "Autopista Sur"),
-    ("Puente Aranda", "Los Martires", "Calle 13"),
-    ("Puente Aranda", "Antonio Narino", "Avenida NQS"),
-    ("Los Martires", "Santa Fe", "Avenida Jimenez"),
-    ("Los Martires", "Antonio Narino", "Avenida Caracas"),
-    ("Santa Fe", "La Candelaria", "Carrera 7"),
-    ("La Candelaria", "Antonio Narino", "Avenida Comuneros"),
+    ("Pandiaco", "Torobajo", "Avenida Panamericana"),
+    ("Pandiaco", "Palermo", "Avenida de los Estudiantes"),
+    ("Pandiaco", "Las Cuadras", "Carrera 27"),
+    ("Torobajo", "Anganoy", "Avenida Panamericana"),
+    ("Torobajo", "San Felipe", "Calle 22"),
+    ("Palermo", "Las Cuadras", "Calle 20"),
+    ("Palermo", "Santa Monica", "Avenida Panamericana"),
+    ("Las Cuadras", "Centro", "Carrera 25"),
+    ("Las Cuadras", "San Felipe", "Carrera 24"),
+    ("San Felipe", "Centro", "Calle 18"),
+    ("San Felipe", "Anganoy", "Calle 18"),
+    ("Anganoy", "Mijitayo", "Avenida Mijitayo"),
+    ("Mijitayo", "Chapultepec", "Avenida Idema"),
+    ("Chapultepec", "Centro", "Carrera 27"),
+    ("Chapultepec", "Obrero", "Carrera 22"),
+    ("Chapultepec", "Lorenzo de Aldana", "Avenida Panamericana"),
+    ("Centro", "Obrero", "Avenida Boyaca"),
+    ("Centro", "Santa Monica", "Calle 19"),
+    ("Obrero", "Potrerillo", "Calle 16"),
+    ("Potrerillo", "Lorenzo de Aldana", "Avenida Chile"),
+    ("Potrerillo", "El Tejar", "Avenida Julian Bucheli"),
+    ("Santa Monica", "El Tejar", "Avenida Santander"),
+    ("Santa Monica", "Potrerillo", "Carrera 16"),
 ]
+
+# Base de datos creada con la version de Bogota -> barrio equivalente en Pasto
+# (mismo id, asi los usuarios y reportes que ya existen se conservan).
+BOGOTA_TO_PASTO = {
+    "Chapinero": "Centro",
+    "Usaquen": "Pandiaco",
+    "Teusaquillo": "Las Cuadras",
+    "Barrios Unidos": "Palermo",
+    "Suba": "Torobajo",
+    "Engativa": "Anganoy",
+    "Fontibon": "Mijitayo",
+    "Kennedy": "Lorenzo de Aldana",
+    "Puente Aranda": "Chapultepec",
+    "Los Martires": "Obrero",
+    "Santa Fe": "Potrerillo",
+    "La Candelaria": "San Felipe",
+    "Antonio Narino": "Santa Monica",
+    "Bosa": "El Tejar",
+}
 
 INCIDENT_TYPES = [
     ("armed_robbery", "Robo armado", 5, "#b91c1c"),
@@ -116,12 +138,12 @@ TEXTS = {
 
 # (barrio, tipos, dias_semana, franjas_horarias, peso) -> patrones que la IA debe encontrar
 PATTERNS = [
-    ("Chapinero", ["armed_robbery", "theft"], [3, 4], [19, 20, 21, 22, 23], 40),  # jueves/viernes noche
-    ("Kennedy", ["theft", "assault"], [5, 6], [13, 14, 15, 16, 17], 14),  # fin de semana tarde
-    ("Santa Fe", ["theft", "drug_dealing"], [0, 1, 2, 3, 4], [9, 10, 11, 12], 14),  # entre semana manana
-    ("Suba", ["home_burglary", "vehicle_theft"], [0, 1, 2, 3, 4, 5, 6], [1, 2, 3, 4], 12),  # madrugada
-    ("La Candelaria", ["theft"], [4, 5], [18, 19, 20], 8),
-    ("Bosa", ["assault", "drug_dealing"], [4, 5], [21, 22, 23], 8),
+    ("Centro", ["armed_robbery", "theft"], [3, 4], [19, 20, 21, 22, 23], 40),  # jueves/viernes noche
+    ("Lorenzo de Aldana", ["theft", "assault"], [5, 6], [13, 14, 15, 16, 17], 14),  # fin de semana tarde
+    ("Potrerillo", ["theft", "drug_dealing"], [0, 1, 2, 3, 4], [9, 10, 11, 12], 14),  # entre semana manana
+    ("Torobajo", ["home_burglary", "vehicle_theft"], [0, 1, 2, 3, 4, 5, 6], [1, 2, 3, 4], 12),  # madrugada
+    ("San Felipe", ["theft"], [4, 5], [18, 19, 20], 8),
+    ("El Tejar", ["assault", "drug_dealing"], [4, 5], [21, 22, 23], 8),
 ]
 
 
@@ -150,7 +172,7 @@ def seed(db: Session) -> bool:
     }
     db.add_all(roles.values())
 
-    hoods = {name: models.Neighborhood(name=name, city="Bogota", latitude=lat, longitude=lon) for name, lat, lon in NEIGHBORHOODS}
+    hoods = {name: models.Neighborhood(name=name, city=CITY, latitude=lat, longitude=lon) for name, lat, lon in NEIGHBORHOODS}
     db.add_all(hoods.values())
     db.flush()
 
@@ -171,13 +193,13 @@ def seed(db: Session) -> bool:
     pwd = hash_password(DEMO_PASSWORD)
     users_data = [
         ("Administrador AlertaBarrio", "admin@alertabarrio.co", "admin", None),
-        ("Moderador Central", "moderador@alertabarrio.co", "moderator", "Chapinero"),
-        ("Ana Rodriguez", "ana@alertabarrio.co", "citizen", "Chapinero"),
-        ("Carlos Gomez", "carlos@alertabarrio.co", "citizen", "Chapinero"),
-        ("Laura Martinez", "laura@alertabarrio.co", "citizen", "Kennedy"),
-        ("Pedro Sanchez", "pedro@alertabarrio.co", "citizen", "Suba"),
-        ("Valentina Ruiz", "valentina@alertabarrio.co", "citizen", "Santa Fe"),
-        ("Jorge Herrera", "jorge@alertabarrio.co", "citizen", "Teusaquillo"),
+        ("Moderador Central", "moderador@alertabarrio.co", "moderator", "Centro"),
+        ("Ana Rodriguez", "ana@alertabarrio.co", "citizen", "Centro"),
+        ("Carlos Gomez", "carlos@alertabarrio.co", "citizen", "Centro"),
+        ("Laura Martinez", "laura@alertabarrio.co", "citizen", "Lorenzo de Aldana"),
+        ("Pedro Sanchez", "pedro@alertabarrio.co", "citizen", "Torobajo"),
+        ("Valentina Ruiz", "valentina@alertabarrio.co", "citizen", "Potrerillo"),
+        ("Jorge Herrera", "jorge@alertabarrio.co", "citizen", "Las Cuadras"),
     ]
     users = []
     for full_name, email, role, hood in users_data:
@@ -197,8 +219,8 @@ def seed(db: Session) -> bool:
 
     # Suscripciones: cada vecino a su barrio + algunos barrios extra
     subs = {(u.id, u.neighborhood.id) for u in citizens}
-    subs |= {(citizens[0].id, hoods["Teusaquillo"].id), (citizens[1].id, hoods["Santa Fe"].id), (citizens[5].id, hoods["Chapinero"].id)}
-    subs |= {(moderator.id, hoods["Chapinero"].id)}
+    subs |= {(citizens[0].id, hoods["Las Cuadras"].id), (citizens[1].id, hoods["Potrerillo"].id), (citizens[5].id, hoods["Centro"].id)}
+    subs |= {(moderator.id, hoods["Centro"].id)}
     for uid, nid in subs:
         db.add(models.Subscription(user_id=uid, neighborhood_id=nid))
 
@@ -221,17 +243,17 @@ def seed(db: Session) -> bool:
         plan.append((hood, code, random_moment(90, range(7), list(range(24)))))
     # reportes de HOY (para el resumen diario) y pendientes de moderar
     recent = [
-        ("Chapinero", "armed_robbery", 1, "published"),
-        ("Chapinero", "theft", 3, "verified"),
-        ("Chapinero", "suspicious_activity", 5, "published"),
-        ("Kennedy", "assault", 2, "published"),
-        ("Santa Fe", "theft", 4, "published"),
-        ("Chapinero", "theft", 0.5, "created"),
-        ("Suba", "home_burglary", 0.8, "created"),
-        ("Teusaquillo", "suspicious_activity", 0.3, "created"),
-        ("Kennedy", "armed_robbery", 0.2, "created"),
-        ("Bosa", "vandalism", 0.6, "created"),
-        ("Engativa", "vehicle_theft", 1.5, "in_review"),
+        ("Centro", "armed_robbery", 1, "published"),
+        ("Centro", "theft", 3, "verified"),
+        ("Centro", "suspicious_activity", 5, "published"),
+        ("Lorenzo de Aldana", "assault", 2, "published"),
+        ("Potrerillo", "theft", 4, "published"),
+        ("Centro", "theft", 0.5, "created"),
+        ("Torobajo", "home_burglary", 0.8, "created"),
+        ("Las Cuadras", "suspicious_activity", 0.3, "created"),
+        ("Lorenzo de Aldana", "armed_robbery", 0.2, "created"),
+        ("El Tejar", "vandalism", 0.6, "created"),
+        ("Anganoy", "vehicle_theft", 1.5, "in_review"),
     ]
 
     def make_report(hood_name, code, occurred, status_target):
@@ -248,8 +270,8 @@ def seed(db: Session) -> bool:
             incident_type_id=it.id,
             title=title,
             description=desc,
-            latitude=hood.latitude + rng.gauss(0, 0.004),
-            longitude=hood.longitude + rng.gauss(0, 0.004),
+            latitude=hood.latitude + rng.gauss(0, 0.0018),
+            longitude=hood.longitude + rng.gauss(0, 0.0018),
             occurred_at=occurred,
             status=status_target,
             priority_score=it.severity_level * 20.0,
@@ -297,8 +319,8 @@ def seed(db: Session) -> bool:
 
     ana = citizens[0]
     for msg in [
-        "Nueva alerta en Chapinero: Robo armado - Atraco con arma blanca",
-        "Nueva alerta en Chapinero: Hurto - Raponazo de celular",
+        "Nueva alerta en Centro: Robo armado - Atraco con arma blanca",
+        "Nueva alerta en Centro: Hurto - Raponazo de celular",
     ]:
         db.add(models.Notification(user_id=ana.id, report_id=last.id if last else None, message=msg))
 
@@ -306,14 +328,70 @@ def seed(db: Session) -> bool:
     return True
 
 
+def migrate_to_pasto(db: Session) -> bool:
+    """
+    Pasa una base creada con los barrios de Bogota a los barrios de Pasto.
+
+    No borra nada: cada barrio conserva su id (usuarios, suscripciones y
+    reportes siguen apuntando al mismo), solo cambia nombre, ciudad y
+    coordenadas. Los reportes se mueven junto con su barrio y las vias del
+    grafo se reemplazan por las de Pasto. Si ya esta en Pasto no hace nada.
+    """
+    old = db.scalars(select(models.Neighborhood).where(models.Neighborhood.city == "Bogota")).all()
+    if not old:
+        return False
+
+    coords = {name: (lat, lon) for name, lat, lon in NEIGHBORHOODS}
+    moved = {}
+    for hood in old:
+        new_name = BOGOTA_TO_PASTO.get(hood.name)
+        if new_name is None:
+            hood.city = CITY  # barrio agregado a mano: solo cambiamos la ciudad
+            continue
+        lat, lon = coords[new_name]
+        for r in db.scalars(select(models.Report).where(models.Report.neighborhood_id == hood.id)):
+            # mantenemos la posicion relativa al centro del barrio, pero mas cerca
+            # porque los barrios de Pasto son mas pequenos que las localidades de Bogota
+            r.latitude = lat + (r.latitude - hood.latitude) * 0.45
+            r.longitude = lon + (r.longitude - hood.longitude) * 0.45
+        moved[hood.name] = new_name
+        hood.name, hood.city, hood.latitude, hood.longitude = new_name, CITY, lat, lon
+    db.flush()
+
+    hoods = {h.name: h for h in db.scalars(select(models.Neighborhood))}
+    db.execute(delete(models.NeighborhoodConnection))
+    for a, b, road in CONNECTIONS:
+        if a in hoods and b in hoods:
+            ha, hb = hoods[a], hoods[b]
+            db.add(
+                models.NeighborhoodConnection(
+                    from_neighborhood_id=ha.id,
+                    to_neighborhood_id=hb.id,
+                    distance_meters=_distance_m((ha.latitude, ha.longitude), (hb.latitude, hb.longitude)),
+                    road_name=road,
+                )
+            )
+
+    # Textos guardados que nombran los barrios viejos
+    for n in db.scalars(select(models.Notification)):
+        for a, b in moved.items():
+            n.message = n.message.replace(f" en {a}:", f" en {b}:")
+    # Los resumenes y el riesgo se vuelven a calcular con los barrios nuevos
+    db.execute(delete(models.DailySummary))
+    db.execute(delete(models.RiskHotspot))
+    db.commit()
+    return True
+
+
 def init_db(with_seed: bool = True) -> None:
     Base.metadata.create_all(bind=db_engine)
-    if with_seed:
-        db = SessionLocal()
-        try:
+    db = SessionLocal()
+    try:
+        if with_seed:
             seed(db)
-        finally:
-            db.close()
+        migrate_to_pasto(db)
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

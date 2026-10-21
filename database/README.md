@@ -24,7 +24,7 @@ PostgreSQL 16. **14 tablas, nombres de tablas y columnas en inglés.**
 ## Archivos
 
 - `schema.sql`: crear las tablas (`psql "$DATABASE_URL" -f schema.sql`)
-- `seed.sql`: datos de ejemplo (14 barrios de Bogotá, 8 usuarios, ~150 reportes). Contraseña demo: `Alerta2026*`
+- `seed.sql`: datos de ejemplo (14 barrios de Pasto, 8 usuarios, ~150 reportes). Contraseña demo: `Alerta2026*`
 - `er_diagram.png` / `.svg` / `.dot`: diagrama entidad-relación
 - `generate_er_diagram.py`: regenera el diagrama desde los modelos del backend (requiere graphviz)
 

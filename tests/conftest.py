@@ -8,6 +8,8 @@ if "DATABASE_URL" not in os.environ:
     os.environ["DATABASE_URL"] = f"sqlite:///{_tmp.name}"
 os.environ.setdefault("AI_SERVICE_URL", "http://ai-no-disponible.invalid")
 os.environ.setdefault("AI_TIMEOUT_SECONDS", "1")
+# bcrypt con pocas rondas para que las pruebas sean rapidas
+os.environ.setdefault("BCRYPT_ROUNDS", "4")
 
 import pytest
 from fastapi.testclient import TestClient
