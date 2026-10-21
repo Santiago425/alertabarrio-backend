@@ -57,6 +57,9 @@ def register(data: schemas.RegisterIn, db: Session = Depends(get_db)):
     return schemas.TokenOut(access_token=create_access_token(user), user=user_out(user))
 
 
+STAFF_ROLES = ("moderator", "admin")
+
+
 @router.post("/login", response_model=schemas.TokenOut, dependencies=[Depends(limit_auth_requests)])
 def login(data: schemas.LoginIn, db: Session = Depends(get_db)):
     email = data.email.lower()
@@ -75,6 +78,11 @@ def login(data: schemas.LoginIn, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Correo o contrasena incorrectos")
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "La cuenta esta desactivada")
+    is_staff = user.role.name in STAFF_ROLES
+    if data.account_type == "admin" and not is_staff:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta cuenta no tiene permisos de administrador")
+    if data.account_type == "user" and is_staff:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta es una cuenta de administrador, ingresa como Administrador")
     if user.totp_enabled:
         if not data.otp:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, TWO_FACTOR_REQUIRED, headers={"X-2FA-Required": "true"})

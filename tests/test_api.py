@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.services.engine import engine
 
-from .conftest import login
+from .conftest import PASSWORD, login
 
 
 def test_hello(client):
@@ -369,3 +369,13 @@ def test_ai_client_waits_while_ai_wakes_up(monkeypatch):
     calls.clear()
     result, _ = ai_client._post("/api/v1/heatmap", {})
     assert result is None and len(calls) == 1
+
+
+def test_login_checks_account_type(client):
+    def login_as(email, kind):
+        return client.post("/api/v1/auth/login", json={"email": email, "password": PASSWORD, "account_type": kind})
+
+    assert login_as("ana@alertabarrio.co", "user").status_code == 200
+    assert login_as("ana@alertabarrio.co", "admin").status_code == 403
+    assert login_as("moderador@alertabarrio.co", "admin").status_code == 200
+    assert login_as("moderador@alertabarrio.co", "user").status_code == 403
