@@ -11,6 +11,7 @@ os.environ.setdefault("AI_TIMEOUT_SECONDS", "1")
 # bcrypt con pocas rondas para que las pruebas sean rapidas
 os.environ.setdefault("BCRYPT_ROUNDS", "4")
 os.environ.setdefault("AUTH_RATE_LIMIT", "1000")
+os.environ.setdefault("AI_WAKE_SECONDS", "0")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,7 +23,7 @@ from app.services import ai_client
 PASSWORD = "Alerta2026*"
 
 
-def fake_ai_post(path: str, payload: dict):
+def fake_ai_post(path: str, payload: dict, wait_s: float = 0):
     """Simula el componente de IA para no depender de la red en las pruebas."""
     if path.endswith("analyze-report"):
         text = payload["description"].lower()

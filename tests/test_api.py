@@ -276,7 +276,7 @@ def test_ai_chat_sends_real_context(client, monkeypatch):
 
     sent = {}
 
-    def fake_post(path, payload):
+    def fake_post(path, payload, wait_s=0):
         sent.update(path=path, payload=payload)
         return {"model": "gemini:gemini-2.5-flash", "answer": "Evita el Centro de noche."}, 5
 
@@ -345,3 +345,27 @@ def test_rate_limiter_and_security_headers(client):
     assert not verify_totp("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "abc")
     r = client.get("/api/v1/hello")
     assert r.headers["X-Content-Type-Options"] == "nosniff" and r.headers["X-Frame-Options"] == "DENY"
+
+
+def test_ai_client_waits_while_ai_wakes_up(monkeypatch):
+    import httpx
+
+    from app.services import ai_client
+
+    calls = []
+
+    def fake_httpx_post(url, json, timeout):
+        calls.append(url)
+        code = 502 if len(calls) < 3 else 200
+        return httpx.Response(code, json={"answer": "ok", "model": "m"}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(ai_client.httpx, "post", fake_httpx_post)
+    monkeypatch.setattr(ai_client.time, "sleep", lambda s: None)
+    monkeypatch.setattr(ai_client, "_wake_up", lambda: None)
+
+    result, _ = ai_client._post("/api/v1/chat", {}, wait_s=30)
+    assert result == {"answer": "ok", "model": "m"} and len(calls) == 3
+
+    calls.clear()
+    result, _ = ai_client._post("/api/v1/heatmap", {})
+    assert result is None and len(calls) == 1
