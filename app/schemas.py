@@ -1,7 +1,7 @@
 """Esquemas Pydantic: lo que entra y sale de la API."""
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -30,6 +30,8 @@ class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(max_length=200)
     otp: Optional[str] = Field(default=None, max_length=10)
+    # "user" = vecino, "admin" = moderador o administrador
+    account_type: Optional[Literal["user", "admin"]] = None
 
 
 class TwoFactorSetupOut(BaseModel):
