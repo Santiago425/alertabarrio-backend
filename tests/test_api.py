@@ -361,7 +361,7 @@ def test_ai_client_waits_while_ai_wakes_up(monkeypatch):
 
     monkeypatch.setattr(ai_client.httpx, "post", fake_httpx_post)
     monkeypatch.setattr(ai_client.time, "sleep", lambda s: None)
-    monkeypatch.setattr(ai_client, "_wake_up", lambda: None)
+    monkeypatch.setattr(ai_client, "wake_up", lambda: None)
 
     result, _ = ai_client._post("/api/v1/chat", {}, wait_s=30)
     assert result == {"answer": "ok", "model": "m"} and len(calls) == 3

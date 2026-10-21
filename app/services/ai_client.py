@@ -28,7 +28,7 @@ WAKING_CODES = {502, 503, 504}
 _last_wake = 0.0
 
 
-def _wake_up() -> None:
+def wake_up() -> None:
     """Despierta la IA en segundo plano (sin bloquear la respuesta al usuario)."""
     global _last_wake
     if time.monotonic() - _last_wake < 60:
@@ -65,7 +65,7 @@ def _post(path: str, payload: dict, wait_s: float = 0) -> Tuple[Optional[dict], 
             error = exc
         if time.perf_counter() - start + pause > wait_s:
             log.warning("Componente de IA no disponible en %s: %s", url, error)
-            _wake_up()
+            wake_up()
             return None, int((time.perf_counter() - start) * 1000)
         time.sleep(pause)
         pause = min(pause * 1.5, 8.0)
@@ -119,5 +119,5 @@ def status() -> dict:
         # aca "available" significa "la IA responde", y la lista va en "options"
         return {**data, "options": data.get("available"), "available": True}
     except (httpx.HTTPError, ValueError) as exc:
-        _wake_up()
+        wake_up()
         return {"available": False, "error": str(exc)}

@@ -16,6 +16,7 @@ from .config import get_settings
 from .database import SessionLocal
 from .routers import ai, auth, catalog, general, moderation, notifications, reports, routes
 from .seed import init_db
+from .services import ai_client
 from .services.engine import engine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -28,6 +29,8 @@ async def lifespan(_: FastAPI):
         logging.getLogger("alertabarrio").warning(
             "JWT_SECRET tiene el valor por defecto: configura uno largo y secreto en produccion"
         )
+    if settings.ai_wake_seconds > 0:
+        ai_client.wake_up()  # la IA (plan gratuito) empieza a despertar junto con el backend
     init_db(with_seed=settings.seed_on_startup)
     db = SessionLocal()
     try:
