@@ -273,6 +273,7 @@ def chat(
         "context": {
             "city": get_settings().city,
             "neighborhood": hood.name if hood else None,
+            "neighborhoods": sorted(names.values()),
             "active_alerts": sum(counts.values()),
             "ranking": ranking[:8],
             "hotspots": hotspots,
