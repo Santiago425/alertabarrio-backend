@@ -16,6 +16,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg2://alerta:alerta@localhost:5432/alertabarrio"
     seed_on_startup: bool = True
+    # Cuenta de revision para el profesor (solo se crea si hay clave)
+    profesor_email: str = "profesor@alertabarrio.co"
+    profesor_password: str = ""
 
     jwt_secret: str = "cambiar-este-secreto-en-produccion"
     jwt_algorithm: str = "HS256"
