@@ -403,6 +403,24 @@ def add_missing_columns() -> None:
                 conn.execute(text(f"ALTER TABLE users ADD COLUMN {name} {ddl}"))
 
 
+def ensure_profesor(db: Session) -> None:
+    """Crea (o actualiza la clave de) la cuenta del profesor con rol admin."""
+    settings = get_settings()
+    if not settings.profesor_password:
+        return
+    admin = db.scalar(select(models.Role).where(models.Role.name == "admin"))
+    if admin is None:
+        return
+    email = settings.profesor_email.lower()
+    user = db.scalar(select(models.User).where(models.User.email == email))
+    if user is None:
+        centro = db.scalar(select(models.Neighborhood).where(models.Neighborhood.name == "Centro"))
+        user = models.User(full_name="Profesor", email=email, role=admin, neighborhood=centro)
+        db.add(user)
+    user.password_hash = hash_password(settings.profesor_password)
+    db.commit()
+
+
 def init_db(with_seed: bool = True) -> None:
     Base.metadata.create_all(bind=db_engine)
     add_missing_columns()
@@ -411,6 +429,7 @@ def init_db(with_seed: bool = True) -> None:
         if with_seed:
             seed(db)
         migrate_to_pasto(db)
+        ensure_profesor(db)
     finally:
         db.close()
 

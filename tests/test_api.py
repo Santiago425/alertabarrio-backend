@@ -381,3 +381,18 @@ def test_login_checks_account_type(client):
     assert login_as("ana@alertabarrio.co", "admin").status_code == 403
     assert login_as("moderador@alertabarrio.co", "admin").status_code == 200
     assert login_as("moderador@alertabarrio.co", "user").status_code == 403
+
+
+def test_cuenta_profesor(client, monkeypatch):
+    from app.config import get_settings
+    from app.database import SessionLocal
+    from app.seed import ensure_profesor
+
+    monkeypatch.setattr(get_settings(), "profesor_password", "Profe.Pasto26")
+    with SessionLocal() as db:
+        ensure_profesor(db)
+        ensure_profesor(db)  # no duplica
+    r = client.post("/api/v1/auth/login", json={"email": "profesor@alertabarrio.co", "password": "Profe.Pasto26"})
+    assert r.status_code == 200, r.text
+    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}).json()
+    assert me["role"] == "admin"
