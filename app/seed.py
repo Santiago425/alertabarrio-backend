@@ -21,9 +21,8 @@ from .config import get_settings
 from .database import Base, SessionLocal, engine as db_engine
 from .security import hash_password
 
-DEMO_PASSWORD = "Alerta2026*"
 
-CITY = "Pasto"
+CITY = get_settings().city
 
 # Barrios de San Juan de Pasto (coordenadas aproximadas del centro de cada barrio)
 NEIGHBORHOODS = [
@@ -190,7 +189,7 @@ def seed(db: Session) -> bool:
     types = {code: models.IncidentType(code=code, name=name, severity_level=sev, color=color) for code, name, sev, color in INCIDENT_TYPES}
     db.add_all(types.values())
 
-    pwd = hash_password(DEMO_PASSWORD)
+    pwd = hash_password(get_settings().demo_password)
     users_data = [
         ("Administrador AlertaBarrio", "admin@alertabarrio.co", "admin", None),
         ("Moderador Central", "moderador@alertabarrio.co", "moderator", "Centro"),

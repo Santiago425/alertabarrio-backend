@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # Cuenta de revision para el profesor (solo se crea si hay clave)
     profesor_email: str = "profesor@alertabarrio.co"
     profesor_password: str = ""
+    # Clave de las cuentas de prueba que crea el seed (admin@, moderador@, ana@...)
+    demo_password: str = "Alerta2026*"
 
     jwt_secret: str = "cambiar-este-secreto-en-produccion"
     jwt_algorithm: str = "HS256"

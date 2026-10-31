@@ -39,6 +39,20 @@ def fake_ai_post(path: str, payload: dict, wait_s: float = 0):
         return {"model": "fake", "cells": [], "hotspots": [], "neighborhood_risk": [], "insights": []}, 5
     if path.endswith("summary"):
         return {"model": "fake", "summary": f"Resumen de {payload['neighborhood_name']}"}, 5
+    if path.endswith("interpret-report"):
+        hood = next((p["id"] for p in payload["neighborhoods"] if p["name"].lower() in payload["text"].lower()), None)
+        return {
+            "model": "fake",
+            "incident_type_code": "armed_robbery" if "pistola" in payload["text"] else "theft",
+            "title": "Robo en la avenida",
+            "description": payload["text"],
+            "place": "Avenida Santander",
+            "neighborhood_id": hood,
+        }, 5
+    if path.endswith("interpret-route"):
+        names = {p["name"].lower(): p["id"] for p in payload["neighborhoods"]}
+        found = [names[n] for n in names if n in payload["text"].lower()]
+        return {"model": "fake", "origin_id": None, "destination_id": found[-1] if found else None}, 5
     return None, 5
 
 
