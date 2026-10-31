@@ -419,6 +419,13 @@ def test_voice_report_draft_uses_gps(client, ai_up):
     # sin GPS usa el barrio que nombro
     body = client.post("/api/v1/ai/report-draft", headers=ana, json={"text": "raponazo en Torobajo"}).json()
     assert body["neighborhood"]["name"] == "Torobajo" and body["location_source"] == "texto"
+    # si nombra otro barrio distinto al del GPS, gana el que nombro
+    body = client.post(
+        "/api/v1/ai/report-draft",
+        headers=ana,
+        json={"text": "raponazo en Torobajo", "latitude": pandiaco["latitude"], "longitude": pandiaco["longitude"]},
+    ).json()
+    assert body["neighborhood"]["name"] == "Torobajo" and body["latitude"] != pandiaco["latitude"]
 
 
 def test_voice_report_draft_without_ai(client):

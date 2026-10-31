@@ -315,8 +315,8 @@ def report_draft(
 ):
     """
     El vecino cuenta lo que paso (voz o texto) y Vigia arma el reporte.
-    El barrio sale de la ubicacion del celular (GPS); si no hay GPS, del lugar
-    que nombro; si tampoco, de su barrio registrado. El vecino solo confirma.
+    El barrio sale de la ubicacion del celular (GPS), salvo que nombre otro
+    barrio; si no hay ninguno, se usa su barrio registrado. El vecino solo confirma.
     """
     types = db.scalars(select(models.IncidentType).order_by(models.IncidentType.severity_level.desc())).all()
     payload = {
@@ -333,11 +333,13 @@ def report_draft(
         )
 
     incident_type = next((t for t in types if t.code == result.get("incident_type_code")), types[0])
+    # Si nombra un barrio distinto al de su GPS, el incidente fue alla; si no, vale el GPS
     hood, source = None, None
+    named = db.get(models.Neighborhood, result["neighborhood_id"]) if result.get("neighborhood_id") else None
     if data.latitude is not None and data.longitude is not None:
         hood, source = nearest_neighborhood(db, data.latitude, data.longitude), "gps"
-    if hood is None and result.get("neighborhood_id"):
-        hood, source = db.get(models.Neighborhood, result["neighborhood_id"]), "texto"
+    if named is not None and (hood is None or hood.id != named.id):
+        hood, source = named, "texto"
     if hood is None and user.neighborhood_id:
         hood, source = db.get(models.Neighborhood, user.neighborhood_id), "perfil"
 
