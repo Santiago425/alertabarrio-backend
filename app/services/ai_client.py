@@ -109,6 +109,18 @@ def chat(db: Session, payload: dict, neighborhood_id: Optional[int]) -> Optional
     return result
 
 
+def interpret_report(db: Session, payload: dict, neighborhood_id: Optional[int]) -> Optional[dict]:
+    result, latency = _post("/api/v1/interpret-report", payload, wait_s=get_settings().ai_wake_seconds)
+    _log(db, "voice_report", result, latency, neighborhood_id=neighborhood_id)
+    return result
+
+
+def interpret_route(db: Session, payload: dict, neighborhood_id: Optional[int]) -> Optional[dict]:
+    result, latency = _post("/api/v1/interpret-route", payload, wait_s=get_settings().ai_wake_seconds)
+    _log(db, "voice_route", result, latency, neighborhood_id=neighborhood_id)
+    return result
+
+
 def status() -> dict:
     settings = get_settings()
     try:

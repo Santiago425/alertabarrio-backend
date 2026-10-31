@@ -396,3 +396,44 @@ def test_cuenta_profesor(client, monkeypatch):
     assert r.status_code == 200, r.text
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}).json()
     assert me["role"] == "admin"
+
+
+def test_nearest_neighborhood(client):
+    r = client.get("/api/v1/neighborhoods/nearest", params={"lat": 1.2136, "lng": -77.2811})
+    assert r.status_code == 200 and r.json()["name"] == "Centro"
+
+
+def test_voice_report_draft_uses_gps(client, ai_up):
+    ana = login(client, "ana@alertabarrio.co")
+    hoods = {h["name"]: h for h in client.get("/api/v1/neighborhoods").json()}
+    pandiaco = hoods["Pandiaco"]
+    r = client.post(
+        "/api/v1/ai/report-draft",
+        headers=ana,
+        json={"text": "me robaron con pistola en la avenida", "latitude": pandiaco["latitude"], "longitude": pandiaco["longitude"]},
+    )
+    body = r.json()
+    assert r.status_code == 200 and body["available"]
+    assert body["incident_type"]["code"] == "armed_robbery"
+    assert body["neighborhood"]["name"] == "Pandiaco" and body["location_source"] == "gps"
+    # sin GPS usa el barrio que nombro
+    body = client.post("/api/v1/ai/report-draft", headers=ana, json={"text": "raponazo en Torobajo"}).json()
+    assert body["neighborhood"]["name"] == "Torobajo" and body["location_source"] == "texto"
+
+
+def test_voice_report_draft_without_ai(client):
+    ana = login(client, "ana@alertabarrio.co")
+    body = client.post("/api/v1/ai/report-draft", headers=ana, json={"text": "raponazo en Torobajo"}).json()
+    assert body["available"] is False
+
+
+def test_voice_route_from_gps(client, ai_up):
+    hoods = {h["name"]: h for h in client.get("/api/v1/neighborhoods").json()}
+    torobajo = hoods["Torobajo"]
+    body = client.post(
+        "/api/v1/ai/route",
+        json={"text": "necesito ruta segura hasta el Centro", "latitude": torobajo["latitude"], "longitude": torobajo["longitude"]},
+    ).json()
+    assert body["origin_source"] == "gps"
+    assert body["route"]["from_neighborhood"]["name"] == "Torobajo" and body["route"]["to_neighborhood"]["name"] == "Centro"
+    assert "Tu ruta segura" in body["message"]

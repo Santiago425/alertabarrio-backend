@@ -13,6 +13,11 @@ router = APIRouter(prefix="/api/v1/routes", tags=["routes"])
 
 @router.get("/safe", response_model=schemas.RouteOut)
 def safe_route(from_id: int, to_id: int, db: Session = Depends(get_db)):
+    return compute_safe_route(db, from_id, to_id)
+
+
+def compute_safe_route(db: Session, from_id: int, to_id: int) -> schemas.RouteOut:
+    """Ruta segura (Dijkstra con castigo por alertas), la mas corta y la de menos saltos (BFS)."""
     neighborhoods = {n.id: n for n in db.scalars(select(models.Neighborhood)).all()}
     if from_id not in neighborhoods or to_id not in neighborhoods:
         raise HTTPException(404, "Barrio de origen o destino no existe")

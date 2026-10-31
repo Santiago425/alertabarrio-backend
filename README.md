@@ -41,6 +41,9 @@ tests/            test_structures.py, test_api.py
 | GET | `/api/v1/neighborhoods/ranking` | quick sort |
 | GET | `/api/v1/ai/heatmap`, `/api/v1/ai/daily-summary` | llaman al componente de IA |
 | POST | `/api/v1/ai/chat` | asistente: pregunta del vecino + datos reales (ranking, horas de riesgo, alertas recientes) → IA (Gemini) |
+| POST | `/api/v1/ai/report-draft` | Vigía: el vecino cuenta lo que pasó (voz o texto) y la IA arma el reporte; el barrio sale del GPS |
+| POST | `/api/v1/ai/route` | Vigía: "estoy en la U, necesito ir al centro" → Graph + Dijkstra desde la ubicación del vecino |
+| GET | `/api/v1/neighborhoods/nearest?lat=&lng=` | barrio al que pertenece un punto del mapa (haversine) |
 | GET | `/api/v1/ds/state` | estado interno de todas las estructuras |
 
 ## Seguridad de las contraseñas
@@ -51,6 +54,21 @@ tests/            test_structures.py, test_api.py
 - **Sin pistas:** si el correo no existe se hace igual un bcrypt, así la respuesta tarda lo mismo y no se puede saber qué correos están registrados.
 - **Rehash automático:** si se sube `BCRYPT_ROUNDS`, el hash de cada usuario se actualiza solo la próxima vez que inicia sesión.
 - En producción hay que poner un `JWT_SECRET` largo y secreto (si queda el de ejemplo, el backend lo avisa en el log).
+
+## Cuentas de prueba
+
+Las crea el seed al arrancar con la clave de `DEMO_PASSWORD` (por defecto `Alerta2026*`):
+
+| Correo | Rol |
+|---|---|
+| `admin@alertabarrio.co` | administrador (entrar con el switch "Administrador") |
+| `moderador@alertabarrio.co` | moderador (switch "Administrador") |
+| `ana@alertabarrio.co` | vecina (switch "Usuario") |
+| `profesor@alertabarrio.co` | administrador, clave en `PROFESOR_PASSWORD` |
+
+## Variables de entorno
+
+Nada sensible queda en el código: todo se lee de variables de entorno (archivo `.env` en local, ver `.env.example`) en `app/config.py`.
 
 ## Correr en local
 

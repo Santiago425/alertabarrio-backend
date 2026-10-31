@@ -1,12 +1,13 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
 from ..services.engine import engine
+from ..services.geo import nearest_neighborhood
 
 router = APIRouter(prefix="/api/v1", tags=["catalog"])
 
@@ -23,6 +24,15 @@ def search_neighborhood(name: str, db: Session = Depends(get_db)):
     if nid is None:
         raise HTTPException(404, f"No encontramos el barrio '{name}'")
     return db.get(models.Neighborhood, nid)
+
+
+@router.get("/neighborhoods/nearest", response_model=schemas.NeighborhoodOut)
+def nearest(lat: float = Query(ge=-90, le=90), lng: float = Query(ge=-180, le=180), db: Session = Depends(get_db)):
+    """Barrio al que pertenece un punto del mapa (el de centro mas cercano)."""
+    hood = nearest_neighborhood(db, lat, lng)
+    if hood is None:
+        raise HTTPException(404, "No hay barrios registrados")
+    return hood
 
 
 @router.get("/neighborhoods/ranking")

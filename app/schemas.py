@@ -252,3 +252,33 @@ class ChatOut(BaseModel):
     available: bool
     answer: str
     model: str
+
+
+# ------------------------------------------------- Vigia: reportes y rutas por voz
+class VoiceIn(BaseModel):
+    text: str = Field(min_length=3, max_length=1000)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+
+
+class ReportDraftOut(BaseModel):
+    available: bool
+    model: str
+    message: str = ""
+    incident_type: Optional[IncidentTypeOut] = None
+    neighborhood: Optional[NeighborhoodOut] = None
+    title: str = ""
+    description: str = ""
+    place: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    # de donde salio la ubicacion: "gps", "texto" o "perfil"
+    location_source: Optional[str] = None
+
+
+class VoiceRouteOut(BaseModel):
+    available: bool
+    model: str
+    message: str
+    origin_source: Optional[str] = None
+    route: Optional[RouteOut] = None
