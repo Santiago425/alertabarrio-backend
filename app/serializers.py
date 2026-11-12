@@ -42,6 +42,7 @@ def report_out(r: models.Report, confirmations: Optional[int] = None) -> schemas
         description=r.description,
         latitude=r.latitude,
         longitude=r.longitude,
+        address=r.address,
         occurred_at=ensure_aware(r.occurred_at),
         created_at=ensure_aware(r.created_at),
         status=r.status,

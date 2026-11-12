@@ -10,6 +10,7 @@ Uso manual:  python -m app.seed
 
 import math
 import random
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,7 @@ from sqlalchemy import delete, inspect, select, text
 from sqlalchemy.orm import Session
 
 from . import models
+from .barrios_pasto import BARRIOS
 from .config import get_settings
 from .database import Base, SessionLocal, engine as db_engine
 from .security import hash_password
@@ -382,24 +384,116 @@ def migrate_to_pasto(db: Session) -> bool:
     return True
 
 
-# Columnas que se agregaron despues de crear la tabla en produccion
-NEW_USER_COLUMNS = {
-    "token_version": "INTEGER NOT NULL DEFAULT 0",
-    "totp_secret": "VARCHAR(64)",
-    "totp_enabled": "BOOLEAN NOT NULL DEFAULT false",
-    "last_login_at": "TIMESTAMP WITH TIME ZONE",
+# Columnas que se agregaron despues de crear las tablas en produccion
+NEW_COLUMNS = {
+    "users": {
+        "token_version": "INTEGER NOT NULL DEFAULT 0",
+        "totp_secret": "VARCHAR(64)",
+        "totp_enabled": "BOOLEAN NOT NULL DEFAULT false",
+        "last_login_at": "TIMESTAMP WITH TIME ZONE",
+    },
+    "neighborhoods": {"comuna": "INTEGER"},
+    "reports": {"address": "VARCHAR(200)"},
 }
 
 
 def add_missing_columns() -> None:
     """create_all no altera tablas existentes: agregamos a mano las columnas nuevas."""
-    existing = {c["name"] for c in inspect(db_engine).get_columns("users")}
+    inspector = inspect(db_engine)
     with db_engine.begin() as conn:
-        for name, ddl in NEW_USER_COLUMNS.items():
-            if name not in existing:
-                if db_engine.dialect.name == "sqlite":
-                    ddl = ddl.replace("TIMESTAMP WITH TIME ZONE", "DATETIME").replace("DEFAULT false", "DEFAULT 0")
-                conn.execute(text(f"ALTER TABLE users ADD COLUMN {name} {ddl}"))
+        for table, columns in NEW_COLUMNS.items():
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            for name, ddl in columns.items():
+                if name not in existing:
+                    if db_engine.dialect.name == "sqlite":
+                        ddl = ddl.replace("TIMESTAMP WITH TIME ZONE", "DATETIME").replace("DEFAULT false", "DEFAULT 0")
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+def _norm(name: str) -> str:
+    """Minusculas y sin tildes: 'Santa Mónica' y 'Santa Monica' son el mismo barrio."""
+    return "".join(c for c in unicodedata.normalize("NFD", name.lower()) if unicodedata.category(c) != "Mn").strip()
+
+
+def sync_pasto_barrios(db: Session) -> int:
+    """
+    Agrega los barrios de Pasto que falten (lista completa por comuna en
+    barrios_pasto.py) y conecta cada barrio nuevo con sus vecinos en el grafo.
+
+    No borra nada y conserva los ids. Si un barrio que ya existia cambia de
+    punto (para quedar dentro de su comuna), sus reportes se corren con el.
+    Devuelve cuantos barrios agrego; si ya esta todo, no hace nada.
+    """
+    hoods = db.scalars(select(models.Neighborhood)).all()
+    by_norm = {_norm(h.name): h for h in hoods}
+    if all(_norm(n) in by_norm and by_norm[_norm(n)].comuna == k for n, k, _, _ in BARRIOS):
+        return 0
+
+    added = []
+    for name, comuna, lat, lon in BARRIOS:
+        hood = by_norm.get(_norm(name))
+        if hood is None:
+            hood = models.Neighborhood(name=name, city=CITY, comuna=comuna, latitude=lat, longitude=lon)
+            db.add(hood)
+            by_norm[_norm(name)] = hood
+            added.append(hood)
+            continue
+        if hood.comuna is None and (hood.latitude, hood.longitude) != (lat, lon):
+            dlat, dlon = lat - hood.latitude, lon - hood.longitude
+            for r in db.scalars(select(models.Report).where(models.Report.neighborhood_id == hood.id)):
+                r.latitude += dlat
+                r.longitude += dlon
+            hood.latitude, hood.longitude = lat, lon
+        hood.comuna = comuna
+    db.flush()
+
+    # Grafo: cada barrio se une con sus 3 vecinos mas cercanos y luego se
+    # agregan las uniones minimas (Kruskal) para que toda la ciudad quede conectada.
+    hoods = db.scalars(select(models.Neighborhood)).all()
+    pos = {h.id: (h.latitude, h.longitude) for h in hoods}
+    pairs = set()
+    for c in db.scalars(select(models.NeighborhoodConnection)):
+        pairs.add(frozenset((c.from_neighborhood_id, c.to_neighborhood_id)))
+
+    def connect(a: int, b: int) -> None:
+        key = frozenset((a, b))
+        if a == b or key in pairs:
+            return
+        pairs.add(key)
+        db.add(
+            models.NeighborhoodConnection(
+                from_neighborhood_id=a, to_neighborhood_id=b, distance_meters=_distance_m(pos[a], pos[b]), road_name=None
+            )
+        )
+
+    new_ids = {h.id for h in added}
+    for h in added:
+        near = sorted((o for o in pos if o != h.id), key=lambda o: _distance_m(pos[h.id], pos[o]))[:3]
+        for o in near:
+            connect(h.id, o)
+
+    parent = {i: i for i in pos}
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for key in pairs:
+        a, b = tuple(key)
+        parent[find(a)] = find(b)
+    if len({find(i) for i in pos}) > 1:
+        ids = list(pos)
+        edges = sorted(
+            (_distance_m(pos[a], pos[b]), a, b) for i, a in enumerate(ids) for b in ids[i + 1 :] if a in new_ids or b in new_ids
+        )
+        for _, a, b in edges:
+            if find(a) != find(b):
+                parent[find(a)] = find(b)
+                connect(a, b)
+    db.commit()
+    return len(added)
 
 
 def ensure_profesor(db: Session) -> None:
@@ -428,6 +522,7 @@ def init_db(with_seed: bool = True) -> None:
         if with_seed:
             seed(db)
         migrate_to_pasto(db)
+        sync_pasto_barrios(db)
         ensure_profesor(db)
     finally:
         db.close()

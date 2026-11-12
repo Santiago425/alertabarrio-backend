@@ -62,6 +62,7 @@ class NeighborhoodOut(ORM):
     id: int
     name: str
     city: str
+    comuna: Optional[int] = None
     latitude: float
     longitude: float
 
@@ -108,6 +109,7 @@ class ReportIn(BaseModel):
     neighborhood_id: int
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
+    address: Optional[str] = Field(default=None, max_length=200)
     occurred_at: Optional[datetime] = None
     photo_url: Optional[str] = Field(default=None, max_length=500)
 
@@ -137,6 +139,7 @@ class ReportOut(BaseModel):
     description: str
     latitude: float
     longitude: float
+    address: Optional[str] = None
     occurred_at: datetime
     created_at: datetime
     status: str
