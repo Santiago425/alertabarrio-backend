@@ -53,6 +53,7 @@ class Neighborhood(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     city: Mapped[str] = mapped_column(String(100), nullable=False)
+    comuna: Mapped[Optional[int]] = mapped_column(Integer)  # comuna de Pasto (1 a 12)
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -124,6 +125,7 @@ class Report(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    address: Mapped[Optional[str]] = mapped_column(String(200))  # direccion escrita o encontrada en el mapa
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="created", nullable=False, index=True)
     priority_score: Mapped[float] = mapped_column(Float, default=0, nullable=False)

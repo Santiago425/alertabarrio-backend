@@ -72,6 +72,7 @@ def create_report(
         description=data.description.strip(),
         latitude=data.latitude,
         longitude=data.longitude,
+        address=(data.address or "").strip() or None,
         occurred_at=occurred_at,
         status="created",
         priority_score=compute_priority(incident_type.severity_level, None, bool(data.photo_url)),
