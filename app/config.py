@@ -46,6 +46,8 @@ class Settings(BaseSettings):
 
     # Origenes permitidos para el frontend (CORS), separados por coma
     cors_origins: str = "*"
+    # Ademas de la lista: vistas previas de Vercel del frontend y el frontend en local
+    cors_origin_regex: str = r"https://alertabarrio-frontend(-[a-z0-9-]+)?\.vercel\.app|http://(localhost|127\.0\.0\.1)(:\d+)?"
 
     # Zona horaria para analizar patrones (dia de la semana / hora)
     timezone: str = "America/Bogota"
