@@ -94,6 +94,7 @@ class IncidentTypeOut(ORM):
     color: str
     duration_minutes: Optional[int] = None  # cuanto dura la alerta en el mapa (0 = no vence)
     is_active: bool = True
+    category: Optional[str] = None
 
 
 # Configuracion de alertas (panel del administrador)
@@ -106,6 +107,7 @@ class IncidentTypeIn(BaseModel):
     color: str = Field(default="#2563eb", pattern=r"^#[0-9a-fA-F]{6}$")
     duration_minutes: int = Field(ge=0, le=MAX_DURATION)
     is_active: bool = True
+    category: str = Field(default="Otros", min_length=2, max_length=40)
 
 
 class IncidentTypeUpdate(BaseModel):
@@ -114,6 +116,7 @@ class IncidentTypeUpdate(BaseModel):
     color: Optional[str] = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     duration_minutes: Optional[int] = Field(default=None, ge=0, le=MAX_DURATION)
     is_active: Optional[bool] = None
+    category: Optional[str] = Field(default=None, min_length=2, max_length=40)
 
 
 class IncidentTypeAdminOut(IncidentTypeOut):

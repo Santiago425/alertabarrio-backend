@@ -72,5 +72,5 @@ def list_incident_types(db: Session = Depends(get_db)):
     return db.scalars(
         select(models.IncidentType)
         .where(models.IncidentType.is_active.is_(True))
-        .order_by(models.IncidentType.severity_level.desc())
+        .order_by(models.IncidentType.category, models.IncidentType.severity_level.desc(), models.IncidentType.name)
     ).all()

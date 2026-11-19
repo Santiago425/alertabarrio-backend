@@ -91,9 +91,9 @@ BOGOTA_TO_PASTO = {
 
 INCIDENT_TYPES = [
     ("armed_robbery", "Robo armado", 5, "#b91c1c"),
-    ("assault", "Agresion o rina", 4, "#dc2626"),
+    ("assault", "Agresión o riña", 4, "#dc2626"),
     ("home_burglary", "Robo a vivienda", 4, "#ea580c"),
-    ("vehicle_theft", "Robo de vehiculo", 4, "#f97316"),
+    ("vehicle_theft", "Robo de vehículo", 4, "#f97316"),
     ("theft", "Hurto", 3, "#f59e0b"),
     ("drug_dealing", "Expendio de drogas", 3, "#9333ea"),
     ("vandalism", "Vandalismo", 2, "#2563eb"),
@@ -113,6 +113,74 @@ DEFAULT_DURATIONS = {
     "suspicious_activity": 2 * 60,
 }
 DEFAULT_DURATION = 24 * 60
+
+# Categorias para agrupar los tipos (en el reporte y en Configuracion de alertas)
+CATEGORIES = ["Seguridad", "Tránsito", "Emergencias", "Servicios públicos", "Convivencia", "Otros"]
+BASE_CATEGORY = {
+    "armed_robbery": "Seguridad",
+    "assault": "Seguridad",
+    "home_burglary": "Seguridad",
+    "vehicle_theft": "Seguridad",
+    "theft": "Seguridad",
+    "drug_dealing": "Seguridad",
+    "suspicious_activity": "Seguridad",
+    "vandalism": "Convivencia",
+}
+
+# Catalogo completo (el profe pidio mas tipos). Referencia: Codigo de Policia (Ley 1801),
+# categorias de la Policia Nacional y la Linea 123.
+# (codigo, nombre, gravedad 1-5, color, minutos en el mapa, categoria)
+EXTRA_INCIDENT_TYPES = [
+    # Seguridad
+    ("business_robbery", "Hurto a comercio", 4, "#c2410c", 6 * 60, "Seguridad"),
+    ("bike_theft", "Hurto de bicicleta", 3, "#d97706", 12 * 60, "Seguridad"),
+    ("gunshots", "Disparos", 5, "#7f1d1d", 3 * 60, "Seguridad"),
+    ("homicide", "Homicidio", 5, "#450a0a", 24 * 60, "Seguridad"),
+    ("extortion", "Extorsión", 5, "#9f1239", 24 * 60, "Seguridad"),
+    ("sexual_harassment", "Acoso o abuso sexual", 5, "#db2777", 12 * 60, "Seguridad"),
+    ("domestic_violence", "Violencia intrafamiliar", 5, "#be123c", 12 * 60, "Seguridad"),
+    ("child_abuse", "Maltrato infantil", 5, "#e11d48", 12 * 60, "Seguridad"),
+    ("missing_person", "Persona desaparecida", 5, "#7c3aed", 3 * 24 * 60, "Seguridad"),
+    ("gang_activity", "Pandillas", 4, "#581c87", 24 * 60, "Seguridad"),
+    ("scam", "Estafa", 2, "#a16207", 24 * 60, "Seguridad"),
+    # Transito
+    ("traffic_accident", "Accidente de tránsito", 3, "#0284c7", 90, "Tránsito"),
+    ("motorcycle_accident", "Accidente de moto", 3, "#0ea5e9", 60, "Tránsito"),
+    ("pedestrian_hit", "Atropello", 4, "#0369a1", 2 * 60, "Tránsito"),
+    ("drunk_driving", "Conductor ebrio", 4, "#1d4ed8", 60, "Tránsito"),
+    ("illegal_racing", "Piques ilegales", 3, "#4338ca", 2 * 60, "Tránsito"),
+    ("road_blocked", "Vía bloqueada o trancón", 2, "#78716c", 2 * 60, "Tránsito"),
+    ("traffic_light_failure", "Semáforo dañado", 2, "#57534e", 12 * 60, "Tránsito"),
+    ("pothole", "Hueco en la vía", 1, "#a8a29e", 7 * 24 * 60, "Tránsito"),
+    ("abandoned_vehicle", "Vehículo abandonado", 1, "#94a3b8", 3 * 24 * 60, "Tránsito"),
+    # Emergencias
+    ("medical_emergency", "Emergencia médica", 4, "#10b981", 60, "Emergencias"),
+    ("fire", "Incendio", 5, "#f43f5e", 4 * 60, "Emergencias"),
+    ("gas_leak", "Fuga de gas", 5, "#fb7185", 3 * 60, "Emergencias"),
+    ("flood", "Inundación", 4, "#0891b2", 6 * 60, "Emergencias"),
+    ("landslide", "Deslizamiento", 4, "#92400e", 24 * 60, "Emergencias"),
+    ("earthquake", "Sismo", 5, "#78350f", 6 * 60, "Emergencias"),
+    ("volcanic_activity", "Actividad del volcán Galeras", 4, "#b45309", 24 * 60, "Emergencias"),
+    ("fallen_power_line", "Cable eléctrico caído", 4, "#facc15", 6 * 60, "Emergencias"),
+    ("fallen_tree", "Árbol caído", 2, "#15803d", 6 * 60, "Emergencias"),
+    # Servicios publicos
+    ("streetlight_failure", "Falla de alumbrado", 1, "#eab308", 3 * 24 * 60, "Servicios públicos"),
+    ("power_outage", "Corte de luz", 2, "#ca8a04", 6 * 60, "Servicios públicos"),
+    ("water_outage", "Corte de agua", 2, "#06b6d4", 12 * 60, "Servicios públicos"),
+    ("open_sewer", "Alcantarilla destapada", 3, "#475569", 3 * 24 * 60, "Servicios públicos"),
+    ("garbage", "Basuras acumuladas", 1, "#4d7c0f", 3 * 24 * 60, "Servicios públicos"),
+    # Convivencia
+    ("excessive_noise", "Ruido excesivo", 1, "#6366f1", 3 * 60, "Convivencia"),
+    ("public_drug_use", "Consumo de sustancias en vía pública", 2, "#a855f7", 4 * 60, "Convivencia"),
+    ("public_drinking", "Consumo de alcohol en vía pública", 1, "#8b5cf6", 3 * 60, "Convivencia"),
+    ("fireworks", "Pólvora", 3, "#f97316", 3 * 60, "Convivencia"),
+    ("dangerous_animal", "Animal peligroso", 3, "#65a30d", 3 * 60, "Convivencia"),
+    ("animal_abuse", "Maltrato animal", 3, "#84cc16", 24 * 60, "Convivencia"),
+    ("public_space_invasion", "Invasión del espacio público", 1, "#64748b", 24 * 60, "Convivencia"),
+    # Otros: para lo que no este en la lista
+    ("other", "Otro (no está en la lista)", 2, "#334155", 4 * 60, "Otros"),
+]
+CATALOG_CODES = set(BASE_CATEGORY) | {c for c, *_ in EXTRA_INCIDENT_TYPES}
 
 TEXTS = {
     "armed_robbery": [
@@ -413,7 +481,11 @@ NEW_COLUMNS = {
     },
     "neighborhoods": {"comuna": "INTEGER"},
     "reports": {"address": "VARCHAR(200)", "published_at": "TIMESTAMP WITH TIME ZONE"},
-    "incident_types": {"duration_minutes": "INTEGER", "is_active": "BOOLEAN NOT NULL DEFAULT true"},
+    "incident_types": {
+        "duration_minutes": "INTEGER",
+        "is_active": "BOOLEAN NOT NULL DEFAULT true",
+        "category": "VARCHAR(40)",
+    },
 }
 
 
@@ -541,6 +613,41 @@ def ensure_alert_expiration(db: Session) -> None:
         db.commit()
 
 
+def ensure_extra_incident_types(db: Session) -> int:
+    """
+    Agrega los tipos del catalogo que falten y llena la categoria de los que no
+    la tienen. No duplica un tipo que el admin ya haya creado con el mismo nombre
+    ni cambia lo que el admin haya editado. Devuelve cuantos tipos agrego.
+    """
+    rows = db.scalars(select(models.IncidentType)).all()
+    by_code = {t.code: t for t in rows}
+    names = {_norm(t.name): t for t in rows}
+    # tildes en los nombres por defecto (solo si el admin no los ha cambiado)
+    fixes = {"Agresion o rina": "Agresión o riña", "Robo de vehiculo": "Robo de vehículo"}
+    for t in rows:
+        if t.name in fixes:
+            t.name = fixes[t.name]
+    for t in rows:
+        if not t.category:
+            t.category = BASE_CATEGORY.get(t.code, "Otros")
+    added = 0
+    for code, name, severity, color, minutes, category in EXTRA_INCIDENT_TYPES:
+        if code in by_code:
+            continue
+        same = names.get(_norm(name))
+        if same is not None:
+            same.category = same.category if same.category and same.category != "Otros" else category
+            continue
+        db.add(
+            models.IncidentType(
+                code=code, name=name, severity_level=severity, color=color, duration_minutes=minutes, category=category
+            )
+        )
+        added += 1
+    db.commit()
+    return added
+
+
 def ensure_profesor(db: Session) -> None:
     """Crea (o actualiza la clave de) las cuentas del profesor: una administradora y una de vecino normal."""
     settings = get_settings()
@@ -579,6 +686,7 @@ def init_db(with_seed: bool = True) -> None:
         migrate_to_pasto(db)
         sync_pasto_barrios(db)
         ensure_alert_expiration(db)
+        ensure_extra_incident_types(db)
         ensure_profesor(db)
     finally:
         db.close()
