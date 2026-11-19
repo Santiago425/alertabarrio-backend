@@ -535,6 +535,19 @@ def test_zone_stats_by_month(client):
     assert len(data["by_month"]) == 6 and len(data["by_hour"]) == 24 and len(data["by_weekday"]) == 7
     assert data["total"] == sum(m["total"] for m in data["by_month"])
     assert data["top_neighborhoods"]
+    # mapa de calor y filas para exportar con los mismos filtros
+    assert sum(p["count"] for p in data["points"]) == data["total"]
+    assert len(data["records"]) == data["total"]
+
+
+def test_zone_stats_single_month(client):
+    data = client.get("/api/v1/stats/zones").json()
+    month = data["by_month"][-1]["month"]
+    one = client.get("/api/v1/stats/zones", params={"month": month}).json()
+    assert one["month"] == month and len(one["by_month"]) == 1
+    assert one["total"] == data["by_month"][-1]["total"]
+    assert all(r["date"].startswith(month) for r in one["records"])
+    assert client.get("/api/v1/stats/zones", params={"month": "noviembre"}).status_code == 422
 
 
 def test_safe_route_history(client):

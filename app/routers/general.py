@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -94,19 +94,31 @@ def zone_stats(
     neighborhood_id: Optional[int] = None,
     comuna: Optional[int] = None,
     incident_type_id: Optional[int] = None,
+    month: Optional[str] = Query(None, description="Un solo mes, formato AAAA-MM (ej. 2026-11)"),
     db: Session = Depends(get_db),
 ):
     """
     Estadisticas con TODOS los reportes guardados (tambien los que ya vencieron):
     cuantos incidentes hubo por mes, por barrio, por comuna, por hora y por dia.
-    Ej: cuantos accidentes hubo en el Centro cada mes.
+    Ej: cuantos accidentes hubo en Torobajo en noviembre.
+    Tambien devuelve los puntos para el mapa de calor y la lista de reportes
+    para exportar a Excel o PDF, con los mismos filtros.
     """
     now_local = to_local(datetime.now(timezone.utc))
-    # primer dia del mes de hace (months-1) meses
-    y, m = now_local.year, now_local.month - (months - 1)
-    while m <= 0:
-        m += 12
-        y -= 1
+    if month:
+        try:
+            y, m = (int(x) for x in month.split("-"))
+            if not 1 <= m <= 12:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(422, "El mes debe tener el formato AAAA-MM, por ejemplo 2026-11")
+        months = 1
+    else:
+        # primer dia del mes de hace (months-1) meses
+        y, m = now_local.year, now_local.month - (months - 1)
+        while m <= 0:
+            m += 12
+            y -= 1
     month_keys = []
     yy, mm = y, m
     for _ in range(months):
@@ -120,6 +132,8 @@ def zone_stats(
     for r in reports:
         local = to_local(r.occurred_at)
         if (local.year, local.month) < (y, m):
+            continue
+        if month and (local.year, local.month) != (y, m):
             continue
         if neighborhood_id is not None and r.neighborhood_id != neighborhood_id:
             continue
@@ -147,8 +161,33 @@ def zone_stats(
         by_weekday[local.weekday()] += 1
 
     active_ids = set(engine.feed_ids(None, limit=100000))
+
+    # mapa de calor: se agrupan los reportes en celdas de ~100 m (3 decimales)
+    cells = Counter((round(r.latitude, 3), round(r.longitude, 3)) for r, _ in rows)
+    points = [{"lat": la, "lng": ln, "count": n} for (la, ln), n in cells.most_common()]
+
+    rows.sort(key=lambda x: x[1], reverse=True)
+    records = [
+        {
+            "id": r.id,
+            "date": local.strftime("%Y-%m-%d"),
+            "time": local.strftime("%H:%M"),
+            "type": types[r.incident_type_id].name if r.incident_type_id in types else "",
+            "category": getattr(types.get(r.incident_type_id), "category", None) or "",
+            "title": r.title,
+            "neighborhood": r.neighborhood.name,
+            "comuna": r.neighborhood.comuna,
+            "address": r.address or "",
+            "status": "Activa" if r.id in active_ids else ("Vencida" if r.status in ("published", "verified") else "Pendiente"),
+        }
+        for r, local in rows[:2000]
+    ]
+
     return {
         "months": months,
+        "month": f"{y}-{m:02d}" if month else None,
+        "points": points,
+        "records": records,
         "total": len(rows),
         "active_now": sum(1 for r, _ in rows if r.id in active_ids),
         "expired": sum(1 for r, _ in rows if r.status in ("published", "verified") and r.id not in active_ids),
