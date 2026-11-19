@@ -100,6 +100,20 @@ INCIDENT_TYPES = [
     ("suspicious_activity", "Actividad sospechosa", 2, "#64748b"),
 ]
 
+# Cuanto dura cada tipo de alerta en el mapa (minutos) si el administrador no lo ha cambiado.
+# Al vencer, la alerta sale del mapa pero queda en el historial y en las estadisticas.
+DEFAULT_DURATIONS = {
+    "armed_robbery": 6 * 60,
+    "assault": 3 * 60,
+    "home_burglary": 12 * 60,
+    "vehicle_theft": 12 * 60,
+    "theft": 4 * 60,
+    "drug_dealing": 3 * 24 * 60,
+    "vandalism": 24 * 60,
+    "suspicious_activity": 2 * 60,
+}
+DEFAULT_DURATION = 24 * 60
+
 TEXTS = {
     "armed_robbery": [
         ("Atraco con arma blanca", "Dos hombres en moto me amenazaron con cuchillo y se llevaron el celular."),
@@ -188,7 +202,12 @@ def seed(db: Session) -> bool:
             )
         )
 
-    types = {code: models.IncidentType(code=code, name=name, severity_level=sev, color=color) for code, name, sev, color in INCIDENT_TYPES}
+    types = {
+        code: models.IncidentType(
+            code=code, name=name, severity_level=sev, color=color, duration_minutes=DEFAULT_DURATIONS.get(code, DEFAULT_DURATION)
+        )
+        for code, name, sev, color in INCIDENT_TYPES
+    }
     db.add_all(types.values())
 
     pwd = hash_password(get_settings().demo_password)
@@ -393,7 +412,8 @@ NEW_COLUMNS = {
         "last_login_at": "TIMESTAMP WITH TIME ZONE",
     },
     "neighborhoods": {"comuna": "INTEGER"},
-    "reports": {"address": "VARCHAR(200)"},
+    "reports": {"address": "VARCHAR(200)", "published_at": "TIMESTAMP WITH TIME ZONE"},
+    "incident_types": {"duration_minutes": "INTEGER", "is_active": "BOOLEAN NOT NULL DEFAULT true"},
 }
 
 
@@ -496,6 +516,31 @@ def sync_pasto_barrios(db: Session) -> int:
     return len(added)
 
 
+def ensure_alert_expiration(db: Session) -> None:
+    """
+    Vencimiento de alertas: cada tipo necesita su duracion y cada alerta
+    publicada necesita saber cuando se publico. Solo llena lo que falte.
+    """
+    changed = False
+    for t in db.scalars(select(models.IncidentType).where(models.IncidentType.duration_minutes.is_(None))):
+        t.duration_minutes = DEFAULT_DURATIONS.get(t.code, DEFAULT_DURATION)
+        changed = True
+    pending = db.scalars(
+        select(models.Report).where(models.Report.status.in_(("published", "verified")), models.Report.published_at.is_(None))
+    ).unique().all()
+    for r in pending:
+        when = db.scalar(
+            select(models.ReportStatusHistory.changed_at)
+            .where(models.ReportStatusHistory.report_id == r.id, models.ReportStatusHistory.new_status == "published")
+            .order_by(models.ReportStatusHistory.changed_at.desc())
+            .limit(1)
+        )
+        r.published_at = when or r.created_at
+        changed = True
+    if changed:
+        db.commit()
+
+
 def ensure_profesor(db: Session) -> None:
     """Crea (o actualiza la clave de) la cuenta del profesor con rol admin."""
     settings = get_settings()
@@ -523,6 +568,7 @@ def init_db(with_seed: bool = True) -> None:
             seed(db)
         migrate_to_pasto(db)
         sync_pasto_barrios(db)
+        ensure_alert_expiration(db)
         ensure_profesor(db)
     finally:
         db.close()

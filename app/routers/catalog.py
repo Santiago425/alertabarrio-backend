@@ -68,4 +68,9 @@ def list_connections(db: Session = Depends(get_db)):
 
 @router.get("/incident-types", response_model=List[schemas.IncidentTypeOut])
 def list_incident_types(db: Session = Depends(get_db)):
-    return db.scalars(select(models.IncidentType).order_by(models.IncidentType.severity_level.desc())).all()
+    """Tipos para reportar: solo los activos (el admin los configura en /admin/incident-types)."""
+    return db.scalars(
+        select(models.IncidentType)
+        .where(models.IncidentType.is_active.is_(True))
+        .order_by(models.IncidentType.severity_level.desc())
+    ).all()

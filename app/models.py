@@ -1,10 +1,10 @@
 """
 Modelo de base de datos (tablas y columnas en ingles, como pidio el profe).
 
-14 tablas:
+15 tablas:
     roles, users, neighborhoods, neighborhood_connections, incident_types,
     reports, report_photos, report_status_history, report_verifications,
-    subscriptions, notifications, ai_analyses, daily_summaries, risk_hotspots
+    subscriptions, notifications, ai_analyses, daily_summaries, risk_hotspots, saved_routes
 
 El diagrama entidad-relacion esta en alertabarrio-database/er_diagram.png
 """
@@ -107,6 +107,11 @@ class IncidentType(Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     severity_level: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # 5 = mas grave
     color: Mapped[str] = mapped_column(String(7), nullable=False)  # color en el mapa
+    # Cuanto dura la alerta en el mapa despues de publicada. Al vencer sale del
+    # mapa y de las activas, pero el reporte queda guardado para las estadisticas.
+    duration_minutes: Mapped[Optional[int]] = mapped_column(Integer)
+    # Un tipo desactivado ya no aparece para reportar (los reportes viejos se conservan)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
 
 
 class Report(Base):
@@ -128,6 +133,8 @@ class Report(Base):
     address: Mapped[Optional[str]] = mapped_column(String(200))  # direccion escrita o encontrada en el mapa
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="created", nullable=False, index=True)
+    # Cuando lo publico el moderador: desde aqui corre la duracion del tipo
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     priority_score: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     # Lo que devolvio el componente de IA al analizar el reporte
     ai_suggested_type_id: Mapped[Optional[int]] = mapped_column(ForeignKey("incident_types.id"))
@@ -229,6 +236,25 @@ class DailySummary(Base):
     reports_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SavedRoute(Base):
+    """Historial de rutas seguras de cada usuario (para volver a abrirlas sin buscarlas)."""
+
+    __tablename__ = "saved_routes"
+    __table_args__ = (UniqueConstraint("user_id", "from_neighborhood_id", "to_neighborhood_id", name="uq_saved_route"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_neighborhood_id: Mapped[int] = mapped_column(ForeignKey("neighborhoods.id", ondelete="CASCADE"), nullable=False)
+    to_neighborhood_id: Mapped[int] = mapped_column(ForeignKey("neighborhoods.id", ondelete="CASCADE"), nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(String(60))  # "De la U a mi casa"
+    times_used: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    from_neighborhood: Mapped[Neighborhood] = relationship(foreign_keys=[from_neighborhood_id], lazy="joined")
+    to_neighborhood: Mapped[Neighborhood] = relationship(foreign_keys=[to_neighborhood_id], lazy="joined")
 
 
 class RiskHotspot(Base):

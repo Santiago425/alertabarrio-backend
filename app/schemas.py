@@ -92,6 +92,33 @@ class IncidentTypeOut(ORM):
     name: str
     severity_level: int
     color: str
+    duration_minutes: Optional[int] = None  # cuanto dura la alerta en el mapa (0 = no vence)
+    is_active: bool = True
+
+
+# Configuracion de alertas (panel del administrador)
+MAX_DURATION = 30 * 24 * 60  # 30 dias
+
+
+class IncidentTypeIn(BaseModel):
+    name: str = Field(min_length=3, max_length=80)
+    severity_level: int = Field(ge=1, le=5)
+    color: str = Field(default="#2563eb", pattern=r"^#[0-9a-fA-F]{6}$")
+    duration_minutes: int = Field(ge=0, le=MAX_DURATION)
+    is_active: bool = True
+
+
+class IncidentTypeUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=3, max_length=80)
+    severity_level: Optional[int] = Field(default=None, ge=1, le=5)
+    color: Optional[str] = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+    duration_minutes: Optional[int] = Field(default=None, ge=0, le=MAX_DURATION)
+    is_active: Optional[bool] = None
+
+
+class IncidentTypeAdminOut(IncidentTypeOut):
+    reports_total: int = 0
+    active_now: int = 0
 
 
 class ConnectionOut(BaseModel):
@@ -152,6 +179,9 @@ class ReportOut(BaseModel):
     ai_confidence: Optional[float] = None
     ai_zone_risk: Optional[float] = None
     confirmations: Optional[int] = None
+    published_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None  # cuando sale del mapa
+    expired: bool = False  # ya vencio: no esta en el mapa pero queda en el historial
 
 
 class ReportCreatedOut(BaseModel):
@@ -237,6 +267,20 @@ class RouteOut(BaseModel):
     fewest_hops_path: List[NeighborhoodOut]
     avoided: List[Dict[str, Any]]
     explanation: str
+
+
+class SavedRouteOut(BaseModel):
+    id: int
+    from_neighborhood: NeighborhoodOut
+    to_neighborhood: NeighborhoodOut
+    label: Optional[str] = None
+    times_used: int
+    created_at: datetime
+    last_used_at: datetime
+
+
+class SavedRouteLabelIn(BaseModel):
+    label: Optional[str] = Field(default=None, max_length=60)
 
 
 # ------------------------------------------------------------- asistente IA

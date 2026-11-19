@@ -1,4 +1,17 @@
-"""Panel de moderacion: COLA DE PRIORIDAD + PILA para deshacer."""
+"""
+Panel de moderacion: COLA DE PRIORIDAD + PILA para deshacer.
+
+Como funciona la moderacion:
+  1. Un vecino reporta -> el reporte queda PENDIENTE (nadie mas lo ve).
+  2. Un administrador/moderador lo revisa y decide:
+       - Publicar: sale en el mapa y se avisa a los vecinos suscritos.
+         Dura en el mapa lo que diga su tipo (Configuracion de alertas).
+       - Rechazar: no se publica (falso, repetido u ofensivo).
+  3. Una alerta publicada se puede Retirar del mapa si era falsa.
+  4. Cualquier decision se puede Deshacer (pop de la pila de estados).
+El usuario normal NO puede borrar ni editar alertas: solo reportar y confirmar.
+Nada se borra de la base de datos: todo queda para el historial y las estadisticas.
+"""
 
 from typing import List
 
@@ -90,9 +103,26 @@ def reject(
     moderator: models.User = Depends(require_moderator),
 ):
     report = report_service.get_report_or_404(db, report_id)
+    if report.status in ("published", "verified"):
+        report_service.withdraw(db, report, moderator, data.note)
+        return report_out(report)
     if report.status == "created":
         engine.take_specific(report_id)
     report_service.change_status(db, report, "rejected", moderator, data.note or "Reporte rechazado")
+    return report_out(report)
+
+
+@router.post("/reports/{report_id}/withdraw", response_model=schemas.ReportOut)
+def withdraw(
+    report_id: int,
+    data: schemas.ModerationActionIn,
+    db: Session = Depends(get_db),
+    moderator: models.User = Depends(require_moderator),
+):
+    """Retirar del mapa una alerta ya publicada (falsa o ya resuelta). Solo administradores/moderadores;
+    el reporte no se borra de la base de datos: queda como 'rechazado' en el historial."""
+    report = report_service.get_report_or_404(db, report_id)
+    report_service.withdraw(db, report, moderator, data.note)
     return report_out(report)
 
 

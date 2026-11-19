@@ -1,6 +1,6 @@
 """Logica de negocio de los reportes (cambios de estado + estructuras)."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -15,8 +15,9 @@ from .engine import ensure_aware, engine
 ALLOWED = {
     "created": {"in_review", "rejected"},
     "in_review": {"published", "rejected"},
-    "published": {"verified"},
-    "verified": set(),
+    # el administrador puede retirar (borrar del mapa) una alerta ya publicada
+    "published": {"verified", "rejected"},
+    "verified": {"rejected"},
     "rejected": set(),
 }
 
@@ -64,9 +65,21 @@ def change_status(
 
 
 def publish(db: Session, report: models.Report, moderator: models.User, note: Optional[str]) -> int:
+    report.published_at = datetime.now(timezone.utc)  # desde aqui corre la duracion del tipo
     change_status(db, report, "published", moderator, note)
+    item = engine.get_item(report.id)
+    if item is not None:
+        item.published_at = ensure_aware(report.published_at)
     message = f"Nueva alerta en {report.neighborhood.name}: {report.incident_type.name} - {report.title}"
     return engine.publish(report.id, report.user_id, message)
+
+
+def withdraw(db: Session, report: models.Report, moderator: models.User, note: Optional[str]) -> None:
+    """El administrador retira una alerta publicada: sale del mapa, queda en el historial como rechazada."""
+    if report.status not in ("published", "verified"):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Solo se pueden retirar alertas publicadas")
+    change_status(db, report, "rejected", moderator, note or "Retirada por el administrador")
+    engine.unpublish(report.id)
 
 
 def undo(db: Session, report: models.Report) -> tuple[str, str]:
@@ -80,6 +93,11 @@ def undo(db: Session, report: models.Report) -> tuple[str, str]:
     if row is not None:
         db.delete(row)
     report.status = current.new_status
+    if current.new_status in ("created", "in_review"):
+        report.published_at = None
+        item = engine.get_item(report.id)
+        if item is not None:
+            item.published_at = None
     db.commit()
 
     was_active = undone.new_status in ("published", "verified")
@@ -89,6 +107,8 @@ def undo(db: Session, report: models.Report) -> tuple[str, str]:
             report.id,
             message=f"Se retiro la alerta '{report.title}' en {report.neighborhood.name} (publicada por error).",
         )
+    if is_active and not was_active:
+        engine.refeed(report.id)  # se deshizo un retiro: vuelve al mapa
     if current.new_status == "created":
         engine.requeue(report.id)  # vuelve a la cola de prioridad
     return undone.new_status, current.new_status
