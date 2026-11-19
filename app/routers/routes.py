@@ -131,11 +131,11 @@ def compute_safe_route(db: Session, from_id: int, to_id: int) -> schemas.RouteOu
         risky = [neighborhoods[n].name for n in safe_path if severity.get(n, 0) > 0]
         if risky:
             explanation = (
-                "No hay un desvio razonable: la ruta mas corta tambien es la de menor riesgo, "
-                f"pero pasa por {', '.join(risky)} con alertas activas. Tenga precaucion."
+                "No hay un desvío razonable: la ruta más corta también es la de menor riesgo, "
+                f"pero pasa por {', '.join(risky)} con alertas activas. Tenga precaución."
             )
         else:
-            explanation = "La ruta mas corta ya es segura: no pasa por barrios con alertas activas."
+            explanation = "La ruta más corta ya es segura: no pasa por barrios con alertas activas."
 
     return schemas.RouteOut(
         from_neighborhood=to_out([from_id])[0],

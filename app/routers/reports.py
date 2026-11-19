@@ -56,7 +56,7 @@ def create_report(
     incident_type = db.get(models.IncidentType, data.incident_type_id)
     neighborhood = db.get(models.Neighborhood, data.neighborhood_id)
     if incident_type is None or neighborhood is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tipo de incidente o barrio invalido")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tipo de incidente o barrio inválido")
     if not incident_type.is_active:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ese tipo de alerta fue desactivado por el administrador")
     occurred_at = data.occurred_at or datetime.now(timezone.utc)

@@ -80,7 +80,7 @@ def heatmap(
             ],
             hotspots=[],
             neighborhood_risk=[],
-            insights=["El componente de IA no esta disponible en este momento."],
+            insights=["El componente de IA no está disponible en este momento."],
         )
 
     # Guardamos las zonas calientes en la tabla risk_hotspots
@@ -241,7 +241,7 @@ def _time_ago(dt: datetime) -> str:
         return f"hace {max(minutes, 1)} min"
     if minutes < 60 * 24:
         return f"hace {minutes // 60} h"
-    return f"hace {minutes // (60 * 24)} dias"
+    return f"hace {minutes // (60 * 24)} días"
 
 
 @router.post("/chat", response_model=schemas.ChatOut)
@@ -298,7 +298,7 @@ def chat(
         return schemas.ChatOut(
             available=False,
             model="no disponible",
-            answer="La IA no esta disponible en este momento. Intenta de nuevo en un minuto.",
+            answer="La IA no está disponible en este momento. Intenta de nuevo en un minuto.",
         )
     return schemas.ChatOut(available=True, answer=result["answer"], model=result["model"])
 
@@ -394,7 +394,7 @@ def voice_route(
     if destination_id is None:
         return schemas.VoiceRouteOut(available=True, model=model, message="¿Hacia donde vas? Dime el barrio o un lugar conocido.")
     if origin_id is None:
-        return schemas.VoiceRouteOut(available=True, model=model, message="¿Desde donde sales? Activa tu ubicacion o dime el barrio.")
+        return schemas.VoiceRouteOut(available=True, model=model, message="¿Desde dónde sales? Activa tu ubicación o dime el barrio.")
     if origin_id == destination_id:
         return schemas.VoiceRouteOut(available=True, model=model, message="Ya estas en ese barrio.", origin_source=source)
     try:

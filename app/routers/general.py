@@ -12,6 +12,7 @@ from ..config import get_settings
 from ..database import get_db
 from ..services.engine import ensure_aware, engine
 from ..services.report_service import to_local
+from ..security import require_moderator
 
 router = APIRouter(tags=["general"])
 
@@ -35,9 +36,9 @@ def health():
     return {"status": "ok", "structures_loaded": engine.loaded}
 
 
-@router.get("/api/v1/ds/state")
+@router.get("/api/v1/ds/state", dependencies=[Depends(require_moderator)])
 def data_structures_state():
-    """Muestra el estado interno de TODAS las estructuras de datos."""
+    """Muestra el estado interno de TODAS las estructuras de datos (solo admin/moderador: incluye pendientes)."""
     return engine.snapshot()
 
 
