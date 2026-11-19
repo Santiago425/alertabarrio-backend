@@ -400,7 +400,7 @@ def test_cuenta_profesor(client, monkeypatch):
     # segunda cuenta: vecino normal, entra con el switch "Usuario"
     r = client.post(
         "/api/v1/auth/login",
-        json={"email": "vecino.profesor@alertabarrio.co", "password": "Profe.Pasto26", "account_type": "user"},
+        json={"email": "vecino@alertabarrio.co", "password": "Profe.Pasto26", "account_type": "user"},
     )
     assert r.status_code == 200, r.text
     assert r.json()["user"]["role"] == "citizen"

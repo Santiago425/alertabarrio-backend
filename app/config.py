@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Cuenta de revision para el profesor (solo se crea si hay clave)
     profesor_email: str = "profesor@alertabarrio.co"
     # Segunda cuenta del profesor, como vecino normal (misma clave), para probar la vista de usuario
-    profesor_user_email: str = "vecino.profesor@alertabarrio.co"
+    profesor_user_email: str = "vecino@alertabarrio.co"
     profesor_password: str = ""
     # Clave de las cuentas de prueba que crea el seed (admin@, moderador@, ana@...)
     demo_password: str = "Alerta2026*"
