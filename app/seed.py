@@ -114,6 +114,22 @@ DEFAULT_DURATIONS = {
 }
 DEFAULT_DURATION = 24 * 60
 
+# Catalogo ampliado (el profe pidio mas tipos). (codigo, nombre, gravedad, color, minutos en el mapa)
+EXTRA_INCIDENT_TYPES = [
+    ("medical_emergency", "Emergencia médica", 4, "#10b981", 60),
+    ("motorcycle_accident", "Accidente de moto", 3, "#0ea5e9", 60),
+    ("traffic_accident", "Accidente de tránsito", 3, "#0284c7", 90),
+    ("domestic_violence", "Violencia intrafamiliar", 5, "#be123c", 12 * 60),
+    ("fire", "Incendio", 5, "#f43f5e", 4 * 60),
+    ("flood", "Inundación", 4, "#0891b2", 6 * 60),
+    ("landslide", "Deslizamiento", 4, "#92400e", 24 * 60),
+    ("road_blocked", "Vía bloqueada o trancón", 2, "#78716c", 2 * 60),
+    ("dangerous_animal", "Animal peligroso", 3, "#65a30d", 3 * 60),
+    ("public_drug_use", "Consumo de sustancias en vía pública", 2, "#a855f7", 4 * 60),
+    ("excessive_noise", "Ruido excesivo", 1, "#6366f1", 3 * 60),
+    ("streetlight_failure", "Falla de alumbrado", 1, "#eab308", 3 * 24 * 60),
+]
+
 TEXTS = {
     "armed_robbery": [
         ("Atraco con arma blanca", "Dos hombres en moto me amenazaron con cuchillo y se llevaron el celular."),
@@ -541,6 +557,26 @@ def ensure_alert_expiration(db: Session) -> None:
         db.commit()
 
 
+def ensure_extra_incident_types(db: Session) -> int:
+    """
+    Agrega el catalogo ampliado de tipos UNA sola vez (si ya se agrego antes no
+    hace nada, asi un tipo que el admin borro no vuelve a aparecer). Tampoco
+    duplica un tipo que el admin ya haya creado con el mismo nombre.
+    """
+    codes = {c for (c,) in db.execute(select(models.IncidentType.code))}
+    if any(code in codes for code, *_ in EXTRA_INCIDENT_TYPES):
+        return 0
+    names = {_norm(n) for (n,) in db.execute(select(models.IncidentType.name))}
+    added = 0
+    for code, name, severity, color, minutes in EXTRA_INCIDENT_TYPES:
+        if _norm(name) in names:
+            continue
+        db.add(models.IncidentType(code=code, name=name, severity_level=severity, color=color, duration_minutes=minutes))
+        added += 1
+    db.commit()
+    return added
+
+
 def ensure_profesor(db: Session) -> None:
     """Crea (o actualiza la clave de) las cuentas del profesor: una administradora y una de vecino normal."""
     settings = get_settings()
@@ -579,6 +615,7 @@ def init_db(with_seed: bool = True) -> None:
         migrate_to_pasto(db)
         sync_pasto_barrios(db)
         ensure_alert_expiration(db)
+        ensure_extra_incident_types(db)
         ensure_profesor(db)
     finally:
         db.close()

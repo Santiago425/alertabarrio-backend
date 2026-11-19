@@ -462,12 +462,12 @@ def test_admin_configures_alert_types(client):
     assert client.get("/api/v1/admin/incident-types", headers=vecina).status_code == 403
     r = client.post(
         "/api/v1/admin/incident-types",
-        json={"name": "Accidente de moto", "severity_level": 3, "color": "#0ea5e9", "duration_minutes": 60},
+        json={"name": "Accidente de bicicleta", "severity_level": 3, "color": "#0ea5e9", "duration_minutes": 60},
         headers=admin,
     )
     assert r.status_code == 201, r.text
     moto = r.json()
-    assert moto["code"] == "accidente_de_moto" and moto["duration_minutes"] == 60
+    assert moto["code"] == "accidente_de_bicicleta" and moto["duration_minutes"] == 60
     assert any(t["id"] == moto["id"] for t in client.get("/api/v1/incident-types").json())
     # renombrar un tipo
     robo = next(t for t in client.get("/api/v1/admin/incident-types", headers=admin).json() if t["code"] == "armed_robbery")
@@ -551,3 +551,16 @@ def test_safe_route_history(client):
     otro = login(client, "carlos@alertabarrio.co")
     assert client.delete(f"/api/v1/routes/history/{row['id']}", headers=otro).status_code == 404
     assert client.delete(f"/api/v1/routes/history/{row['id']}", headers=vecina).json()["deleted"] is True
+
+
+def test_extended_incident_catalog(client):
+    from app.database import SessionLocal
+    from app.seed import ensure_extra_incident_types
+
+    codes = {t["code"]: t for t in client.get("/api/v1/incident-types").json()}
+    for code in ("motorcycle_accident", "traffic_accident", "fire", "flood", "medical_emergency", "domestic_violence"):
+        assert code in codes
+    assert codes["motorcycle_accident"]["duration_minutes"] == 60
+    assert len(codes) >= 18
+    with SessionLocal() as db:
+        assert ensure_extra_incident_types(db) == 0  # no duplica
