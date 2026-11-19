@@ -54,6 +54,10 @@ tests/            test_structures.py, test_api.py
 
 Cada tipo de alerta tiene una **duración** (`incident_types.duration_minutes`, la configura el admin). Desde que el moderador publica la alerta (`reports.published_at`) empieza a contar; al vencer **sale del mapa, del feed y de la ruta segura**, pero el reporte sigue en la base de datos con su estado, así que cuenta para el historial y las estadísticas. Si el admin cambia la duración, aplica de una a las alertas que ya están publicadas. Duración `0` = no vence.
 
+## Tipos de incidentes
+
+Hay un catálogo de **~50 tipos** organizado por categorías (Seguridad, Tránsito, Emergencias, Servicios públicos, Convivencia y Otros), basado en el Código de Policía (Ley 1801), las categorías de la Policía Nacional y la Línea 123. Cada uno trae su gravedad y su duración en el mapa. Al arrancar, el backend agrega los que falten sin duplicar los que el admin ya creó. Para lo que no esté en la lista existe **"Otro"**, y el admin puede crear tipos nuevos desde Configuración de alertas (salen de una para reportar, en el mapa y en las estadísticas).
+
 ## Moderación
 
 1. El vecino reporta → queda **pendiente** (nadie más lo ve).

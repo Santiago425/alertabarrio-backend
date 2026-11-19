@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
 from ..security import require_admin
+from ..seed import CATALOG_CODES, CATEGORIES
 from ..services.engine import engine
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -53,6 +54,13 @@ def _name_taken(db: Session, name: str, exclude_id: int = 0) -> bool:
     )
 
 
+@router.get("/incident-categories")
+def list_categories(db: Session = Depends(get_db), _: models.User = Depends(require_admin)):
+    """Categorias para agrupar los tipos (las del catalogo + las que haya creado el admin)."""
+    used = {c for (c,) in db.execute(select(models.IncidentType.category)) if c}
+    return CATEGORIES + sorted(used - set(CATEGORIES))
+
+
 @router.get("/incident-types", response_model=List[schemas.IncidentTypeAdminOut])
 def list_types(db: Session = Depends(get_db), _: models.User = Depends(require_admin)):
     rows = db.scalars(
@@ -77,6 +85,7 @@ def create_type(data: schemas.IncidentTypeIn, db: Session = Depends(get_db), _: 
         color=data.color,
         duration_minutes=data.duration_minutes,
         is_active=data.is_active,
+        category=data.category.strip(),
     )
     db.add(t)
     db.commit()
@@ -109,7 +118,8 @@ def update_type(
 
 @router.delete("/incident-types/{type_id}")
 def delete_type(type_id: int, db: Session = Depends(get_db), _: models.User = Depends(require_admin)):
-    """Si el tipo ya tiene reportes NO se borra (se perderian datos): se desactiva."""
+    """Si el tipo ya tiene reportes NO se borra (se perderian datos): se desactiva.
+    Los tipos del catalogo base tampoco se borran (volverian a crearse al arrancar): se desactivan."""
     t = db.get(models.IncidentType, type_id)
     if t is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tipo de alerta no encontrado")
@@ -118,10 +128,11 @@ def delete_type(type_id: int, db: Session = Depends(get_db), _: models.User = De
         .select_from(models.Report)
         .where((models.Report.incident_type_id == t.id) | (models.Report.ai_suggested_type_id == t.id))
     )
-    if used:
+    if used or t.code in CATALOG_CODES:
         t.is_active = False
         db.commit()
-        return {"deleted": False, "deactivated": True, "message": f"Tiene {used} reportes: se desactivo para no perder el historial."}
+        reason = f"Tiene {used} reportes" if used else "Es del catalogo base"
+        return {"deleted": False, "deactivated": True, "message": f"{reason}: se desactivo para no perder el historial."}
     db.delete(t)
     db.commit()
     return {"deleted": True, "deactivated": False, "message": "Tipo eliminado."}

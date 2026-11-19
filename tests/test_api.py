@@ -557,10 +557,49 @@ def test_extended_incident_catalog(client):
     from app.database import SessionLocal
     from app.seed import ensure_extra_incident_types
 
-    codes = {t["code"]: t for t in client.get("/api/v1/incident-types").json()}
-    for code in ("motorcycle_accident", "traffic_accident", "fire", "flood", "medical_emergency", "domestic_violence"):
+    types = client.get("/api/v1/incident-types").json()
+    codes = {t["code"]: t for t in types}
+    for code in ("motorcycle_accident", "traffic_accident", "fire", "flood", "medical_emergency", "domestic_violence", "other"):
         assert code in codes
     assert codes["motorcycle_accident"]["duration_minutes"] == 60
-    assert len(codes) >= 18
+    assert codes["motorcycle_accident"]["category"] == "Tránsito"
+    assert codes["armed_robbery"]["category"] == "Seguridad"
+    assert all(t["category"] for t in types)
+    assert len(codes) >= 45
     with SessionLocal() as db:
         assert ensure_extra_incident_types(db) == 0  # no duplica
+
+
+def test_new_type_end_to_end(client, ai_up):
+    """Un tipo creado por el admin sale para reportar, en el mapa y en las estadisticas."""
+    admin = login(client, "admin@alertabarrio.co")
+    vecina = login(client, "ana@alertabarrio.co")
+    t = client.post(
+        "/api/v1/admin/incident-types",
+        json={"name": "Caída de granizo", "severity_level": 2, "duration_minutes": 120, "category": "Emergencias"},
+        headers=admin,
+    ).json()
+    assert t["category"] == "Emergencias"
+    assert any(x["id"] == t["id"] for x in client.get("/api/v1/incident-types").json())
+    assert "Emergencias" in client.get("/api/v1/admin/incident-categories", headers=admin).json()
+    hood = client.get("/api/v1/neighborhoods/search", params={"name": "Centro"}).json()
+    rid = client.post(
+        "/api/v1/reports",
+        json={
+            "title": "Granizada fuerte",
+            "description": "Cayó granizo y tapó las alcantarillas",
+            "incident_type_id": t["id"],
+            "neighborhood_id": hood["id"],
+            "latitude": hood["latitude"],
+            "longitude": hood["longitude"],
+        },
+        headers=vecina,
+    ).json()["report"]["id"]
+    client.post(f"/api/v1/moderation/reports/{rid}/publish", json={}, headers=admin)
+    assert rid in [r["id"] for r in client.get("/api/v1/reports/map").json()]
+    stats = client.get("/api/v1/stats/zones", params={"incident_type_id": t["id"]}).json()
+    assert stats["total"] == 1 and stats["by_type"][0]["name"] == "Caída de granizo"
+    # un tipo del catalogo no se borra, se desactiva
+    other = next(x for x in client.get("/api/v1/admin/incident-types", headers=admin).json() if x["code"] == "pothole")
+    assert client.delete(f"/api/v1/admin/incident-types/{other['id']}", headers=admin).json()["deactivated"] is True
+    client.patch(f"/api/v1/admin/incident-types/{other['id']}", json={"is_active": True}, headers=admin)

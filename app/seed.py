@@ -114,21 +114,73 @@ DEFAULT_DURATIONS = {
 }
 DEFAULT_DURATION = 24 * 60
 
-# Catalogo ampliado (el profe pidio mas tipos). (codigo, nombre, gravedad, color, minutos en el mapa)
+# Categorias para agrupar los tipos (en el reporte y en Configuracion de alertas)
+CATEGORIES = ["Seguridad", "Tránsito", "Emergencias", "Servicios públicos", "Convivencia", "Otros"]
+BASE_CATEGORY = {
+    "armed_robbery": "Seguridad",
+    "assault": "Seguridad",
+    "home_burglary": "Seguridad",
+    "vehicle_theft": "Seguridad",
+    "theft": "Seguridad",
+    "drug_dealing": "Seguridad",
+    "suspicious_activity": "Seguridad",
+    "vandalism": "Convivencia",
+}
+
+# Catalogo completo (el profe pidio mas tipos). Referencia: Codigo de Policia (Ley 1801),
+# categorias de la Policia Nacional y la Linea 123.
+# (codigo, nombre, gravedad 1-5, color, minutos en el mapa, categoria)
 EXTRA_INCIDENT_TYPES = [
-    ("medical_emergency", "Emergencia médica", 4, "#10b981", 60),
-    ("motorcycle_accident", "Accidente de moto", 3, "#0ea5e9", 60),
-    ("traffic_accident", "Accidente de tránsito", 3, "#0284c7", 90),
-    ("domestic_violence", "Violencia intrafamiliar", 5, "#be123c", 12 * 60),
-    ("fire", "Incendio", 5, "#f43f5e", 4 * 60),
-    ("flood", "Inundación", 4, "#0891b2", 6 * 60),
-    ("landslide", "Deslizamiento", 4, "#92400e", 24 * 60),
-    ("road_blocked", "Vía bloqueada o trancón", 2, "#78716c", 2 * 60),
-    ("dangerous_animal", "Animal peligroso", 3, "#65a30d", 3 * 60),
-    ("public_drug_use", "Consumo de sustancias en vía pública", 2, "#a855f7", 4 * 60),
-    ("excessive_noise", "Ruido excesivo", 1, "#6366f1", 3 * 60),
-    ("streetlight_failure", "Falla de alumbrado", 1, "#eab308", 3 * 24 * 60),
+    # Seguridad
+    ("business_robbery", "Hurto a comercio", 4, "#c2410c", 6 * 60, "Seguridad"),
+    ("bike_theft", "Hurto de bicicleta", 3, "#d97706", 12 * 60, "Seguridad"),
+    ("gunshots", "Disparos", 5, "#7f1d1d", 3 * 60, "Seguridad"),
+    ("homicide", "Homicidio", 5, "#450a0a", 24 * 60, "Seguridad"),
+    ("extortion", "Extorsión", 5, "#9f1239", 24 * 60, "Seguridad"),
+    ("sexual_harassment", "Acoso o abuso sexual", 5, "#db2777", 12 * 60, "Seguridad"),
+    ("domestic_violence", "Violencia intrafamiliar", 5, "#be123c", 12 * 60, "Seguridad"),
+    ("child_abuse", "Maltrato infantil", 5, "#e11d48", 12 * 60, "Seguridad"),
+    ("missing_person", "Persona desaparecida", 5, "#7c3aed", 3 * 24 * 60, "Seguridad"),
+    ("gang_activity", "Pandillas", 4, "#581c87", 24 * 60, "Seguridad"),
+    ("scam", "Estafa", 2, "#a16207", 24 * 60, "Seguridad"),
+    # Transito
+    ("traffic_accident", "Accidente de tránsito", 3, "#0284c7", 90, "Tránsito"),
+    ("motorcycle_accident", "Accidente de moto", 3, "#0ea5e9", 60, "Tránsito"),
+    ("pedestrian_hit", "Atropello", 4, "#0369a1", 2 * 60, "Tránsito"),
+    ("drunk_driving", "Conductor ebrio", 4, "#1d4ed8", 60, "Tránsito"),
+    ("illegal_racing", "Piques ilegales", 3, "#4338ca", 2 * 60, "Tránsito"),
+    ("road_blocked", "Vía bloqueada o trancón", 2, "#78716c", 2 * 60, "Tránsito"),
+    ("traffic_light_failure", "Semáforo dañado", 2, "#57534e", 12 * 60, "Tránsito"),
+    ("pothole", "Hueco en la vía", 1, "#a8a29e", 7 * 24 * 60, "Tránsito"),
+    ("abandoned_vehicle", "Vehículo abandonado", 1, "#94a3b8", 3 * 24 * 60, "Tránsito"),
+    # Emergencias
+    ("medical_emergency", "Emergencia médica", 4, "#10b981", 60, "Emergencias"),
+    ("fire", "Incendio", 5, "#f43f5e", 4 * 60, "Emergencias"),
+    ("gas_leak", "Fuga de gas", 5, "#fb7185", 3 * 60, "Emergencias"),
+    ("flood", "Inundación", 4, "#0891b2", 6 * 60, "Emergencias"),
+    ("landslide", "Deslizamiento", 4, "#92400e", 24 * 60, "Emergencias"),
+    ("earthquake", "Sismo", 5, "#78350f", 6 * 60, "Emergencias"),
+    ("volcanic_activity", "Actividad del volcán Galeras", 4, "#b45309", 24 * 60, "Emergencias"),
+    ("fallen_power_line", "Cable eléctrico caído", 4, "#facc15", 6 * 60, "Emergencias"),
+    ("fallen_tree", "Árbol caído", 2, "#15803d", 6 * 60, "Emergencias"),
+    # Servicios publicos
+    ("streetlight_failure", "Falla de alumbrado", 1, "#eab308", 3 * 24 * 60, "Servicios públicos"),
+    ("power_outage", "Corte de luz", 2, "#ca8a04", 6 * 60, "Servicios públicos"),
+    ("water_outage", "Corte de agua", 2, "#06b6d4", 12 * 60, "Servicios públicos"),
+    ("open_sewer", "Alcantarilla destapada", 3, "#475569", 3 * 24 * 60, "Servicios públicos"),
+    ("garbage", "Basuras acumuladas", 1, "#4d7c0f", 3 * 24 * 60, "Servicios públicos"),
+    # Convivencia
+    ("excessive_noise", "Ruido excesivo", 1, "#6366f1", 3 * 60, "Convivencia"),
+    ("public_drug_use", "Consumo de sustancias en vía pública", 2, "#a855f7", 4 * 60, "Convivencia"),
+    ("public_drinking", "Consumo de alcohol en vía pública", 1, "#8b5cf6", 3 * 60, "Convivencia"),
+    ("fireworks", "Pólvora", 3, "#f97316", 3 * 60, "Convivencia"),
+    ("dangerous_animal", "Animal peligroso", 3, "#65a30d", 3 * 60, "Convivencia"),
+    ("animal_abuse", "Maltrato animal", 3, "#84cc16", 24 * 60, "Convivencia"),
+    ("public_space_invasion", "Invasión del espacio público", 1, "#64748b", 24 * 60, "Convivencia"),
+    # Otros: para lo que no este en la lista
+    ("other", "Otro (no está en la lista)", 2, "#334155", 4 * 60, "Otros"),
 ]
+CATALOG_CODES = set(BASE_CATEGORY) | {c for c, *_ in EXTRA_INCIDENT_TYPES}
 
 TEXTS = {
     "armed_robbery": [
@@ -429,7 +481,11 @@ NEW_COLUMNS = {
     },
     "neighborhoods": {"comuna": "INTEGER"},
     "reports": {"address": "VARCHAR(200)", "published_at": "TIMESTAMP WITH TIME ZONE"},
-    "incident_types": {"duration_minutes": "INTEGER", "is_active": "BOOLEAN NOT NULL DEFAULT true"},
+    "incident_types": {
+        "duration_minutes": "INTEGER",
+        "is_active": "BOOLEAN NOT NULL DEFAULT true",
+        "category": "VARCHAR(40)",
+    },
 }
 
 
@@ -559,19 +615,29 @@ def ensure_alert_expiration(db: Session) -> None:
 
 def ensure_extra_incident_types(db: Session) -> int:
     """
-    Agrega el catalogo ampliado de tipos UNA sola vez (si ya se agrego antes no
-    hace nada, asi un tipo que el admin borro no vuelve a aparecer). Tampoco
-    duplica un tipo que el admin ya haya creado con el mismo nombre.
+    Agrega los tipos del catalogo que falten y llena la categoria de los que no
+    la tienen. No duplica un tipo que el admin ya haya creado con el mismo nombre
+    ni cambia lo que el admin haya editado. Devuelve cuantos tipos agrego.
     """
-    codes = {c for (c,) in db.execute(select(models.IncidentType.code))}
-    if any(code in codes for code, *_ in EXTRA_INCIDENT_TYPES):
-        return 0
-    names = {_norm(n) for (n,) in db.execute(select(models.IncidentType.name))}
+    rows = db.scalars(select(models.IncidentType)).all()
+    by_code = {t.code: t for t in rows}
+    names = {_norm(t.name): t for t in rows}
+    for t in rows:
+        if not t.category:
+            t.category = BASE_CATEGORY.get(t.code, "Otros")
     added = 0
-    for code, name, severity, color, minutes in EXTRA_INCIDENT_TYPES:
-        if _norm(name) in names:
+    for code, name, severity, color, minutes, category in EXTRA_INCIDENT_TYPES:
+        if code in by_code:
             continue
-        db.add(models.IncidentType(code=code, name=name, severity_level=severity, color=color, duration_minutes=minutes))
+        same = names.get(_norm(name))
+        if same is not None:
+            same.category = same.category if same.category and same.category != "Otros" else category
+            continue
+        db.add(
+            models.IncidentType(
+                code=code, name=name, severity_level=severity, color=color, duration_minutes=minutes, category=category
+            )
+        )
         added += 1
     db.commit()
     return added

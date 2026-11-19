@@ -112,6 +112,8 @@ class IncidentType(Base):
     duration_minutes: Mapped[Optional[int]] = mapped_column(Integer)
     # Un tipo desactivado ya no aparece para reportar (los reportes viejos se conservan)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    # Seguridad, Transito, Emergencias, Servicios publicos, Convivencia u Otros
+    category: Mapped[Optional[str]] = mapped_column(String(40))
 
 
 class Report(Base):

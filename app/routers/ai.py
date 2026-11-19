@@ -336,7 +336,9 @@ def report_draft(
             available=False, model="no disponible", message="Vigia no responde en este momento. Puedes usar el formulario."
         )
 
-    incident_type = next((t for t in types if t.code == result.get("incident_type_code")), types[0])
+    # si la IA no reconoce el tipo, queda como "Otro" para que el vecino lo elija
+    fallback = next((t for t in types if t.code == "other"), types[0])
+    incident_type = next((t for t in types if t.code == result.get("incident_type_code")), fallback)
     # Si nombra un barrio distinto al de su GPS, el incidente fue alla; si no, vale el GPS
     hood, source = None, None
     named = db.get(models.Neighborhood, result["neighborhood_id"]) if result.get("neighborhood_id") else None
