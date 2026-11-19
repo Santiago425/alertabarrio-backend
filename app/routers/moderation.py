@@ -71,7 +71,7 @@ def take_next(db: Session = Depends(get_db), moderator: models.User = Depends(re
 def review_specific(report_id: int, db: Session = Depends(get_db), moderator: models.User = Depends(require_moderator)):
     report = report_service.get_report_or_404(db, report_id)
     if report.status != "created":
-        raise HTTPException(status.HTTP_409_CONFLICT, "El reporte no esta pendiente")
+        raise HTTPException(status.HTTP_409_CONFLICT, "El reporte no está pendiente")
     engine.take_specific(report_id)  # se saca del heap en O(log n)
     report_service.change_status(db, report, "in_review", moderator, "Abierto directamente por el moderador")
     return report_out(report)

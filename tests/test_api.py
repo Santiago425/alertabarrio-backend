@@ -152,7 +152,10 @@ def test_ai_down_does_not_break(client):
 
 
 def test_ds_state(client):
-    state = client.get("/api/v1/ds/state").json()
+    # incluye los reportes pendientes, asi que un vecino no lo puede ver
+    assert client.get("/api/v1/ds/state").status_code == 401
+    assert client.get("/api/v1/ds/state", headers=login(client, "ana@alertabarrio.co")).status_code == 403
+    state = client.get("/api/v1/ds/state", headers=login(client, "admin@alertabarrio.co")).json()
     for key in ("priority_queue", "status_stacks", "zone_feeds", "notification_queue", "timeline_bst", "city_graph"):
         assert key in state
     assert state["city_graph"]["connected"] is True

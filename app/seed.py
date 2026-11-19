@@ -185,23 +185,23 @@ CATALOG_CODES = set(BASE_CATEGORY) | {c for c, *_ in EXTRA_INCIDENT_TYPES}
 TEXTS = {
     "armed_robbery": [
         ("Atraco con arma blanca", "Dos hombres en moto me amenazaron con cuchillo y se llevaron el celular."),
-        ("Robo con pistola en la esquina", "Un sujeto armado con pistola robo a una pareja que salia del restaurante."),
+        ("Robo con pistola en la esquina", "Un sujeto armado con pistola robó a una pareja que salía del restaurante."),
         ("Asalto a mano armada", "Atracaron a un domiciliario con arma de fuego y le quitaron la moto."),
     ],
     "assault": [
-        ("Rina en la salida del bar", "Varias personas se agarraron a golpes, hay un herido."),
-        ("Agresion a un vecino", "Un hombre golpeo a un vecino en el parque, llamamos a la policia."),
+        ("Riña en la salida del bar", "Varias personas se agarraron a golpes, hay un herido."),
+        ("Agresión a un vecino", "Un hombre golpeó a un vecino en el parque, llamamos a la policía."),
     ],
     "home_burglary": [
         ("Se metieron a una casa", "Forzaron la puerta y se llevaron el televisor y un computador."),
-        ("Robo en apartamento", "Entraron por la ventana del primer piso mientras la familia dormia."),
+        ("Robo en apartamento", "Entraron por la ventana del primer piso mientras la familia dormía."),
     ],
     "vehicle_theft": [
         ("Se robaron un carro", "Hurtaron un carro parqueado en la calle, rompieron el vidrio."),
-        ("Robo de moto", "Se llevaron una moto que estaba frente a la panaderia."),
+        ("Robo de moto", "Se llevaron una moto que estaba frente a la panadería."),
     ],
     "theft": [
-        ("Raponazo de celular", "Le arrebataron el celular a una senora en el paradero del bus."),
+        ("Raponazo de celular", "Le arrebataron el celular a una señora en el paradero del bus."),
         ("Hurto en el transporte", "En el bus le sacaron la billetera del bolsillo a un estudiante."),
         ("Cosquilleo en el centro comercial", "Le robaron el bolso a una mujer sin que se diera cuenta."),
     ],
@@ -210,7 +210,7 @@ TEXTS = {
         ("Olla en la cuadra", "Hay mucho movimiento de gente comprando sustancias en una casa."),
     ],
     "vandalism": [
-        ("Danaron el alumbrado", "Rompieron las lamparas del parque y quedo totalmente oscuro."),
+        ("Dañaron el alumbrado", "Rompieron las lámparas del parque y quedó totalmente oscuro."),
         ("Grafitis y vidrios rotos", "Rayaron las paredes del colegio y rompieron vidrios."),
     ],
     "suspicious_activity": [
@@ -283,9 +283,9 @@ def seed(db: Session) -> bool:
         ("Administrador AlertaBarrio", "admin@alertabarrio.co", "admin", None),
         ("Moderador Central", "moderador@alertabarrio.co", "moderator", "Centro"),
         ("Ana Rodriguez", "ana@alertabarrio.co", "citizen", "Centro"),
-        ("Carlos Gomez", "carlos@alertabarrio.co", "citizen", "Centro"),
-        ("Laura Martinez", "laura@alertabarrio.co", "citizen", "Lorenzo de Aldana"),
-        ("Pedro Sanchez", "pedro@alertabarrio.co", "citizen", "Torobajo"),
+        ("Carlos Gómez", "carlos@alertabarrio.co", "citizen", "Centro"),
+        ("Laura Martínez", "laura@alertabarrio.co", "citizen", "Lorenzo de Aldana"),
+        ("Pedro Sánchez", "pedro@alertabarrio.co", "citizen", "Torobajo"),
         ("Valentina Ruiz", "valentina@alertabarrio.co", "citizen", "Potrerillo"),
         ("Jorge Herrera", "jorge@alertabarrio.co", "citizen", "Las Cuadras"),
     ]
@@ -648,6 +648,39 @@ def ensure_extra_incident_types(db: Session) -> int:
     return added
 
 
+# Textos de ejemplo que se guardaron sin tildes en versiones anteriores del seed
+SEED_TEXT_FIXES = {
+    "Rina en la salida del bar": "Riña en la salida del bar",
+    "Agresion a un vecino": "Agresión a un vecino",
+    "Danaron el alumbrado": "Dañaron el alumbrado",
+    "Un sujeto armado con pistola robo a una pareja que salia del restaurante.": "Un sujeto armado con pistola robó a una pareja que salía del restaurante.",
+    "Un hombre golpeo a un vecino en el parque, llamamos a la policia.": "Un hombre golpeó a un vecino en el parque, llamamos a la policía.",
+    "Entraron por la ventana del primer piso mientras la familia dormia.": "Entraron por la ventana del primer piso mientras la familia dormía.",
+    "Se llevaron una moto que estaba frente a la panaderia.": "Se llevaron una moto que estaba frente a la panadería.",
+    "Le arrebataron el celular a una senora en el paradero del bus.": "Le arrebataron el celular a una señora en el paradero del bus.",
+    "Rompieron las lamparas del parque y quedo totalmente oscuro.": "Rompieron las lámparas del parque y quedó totalmente oscuro.",
+}
+SEED_NAME_FIXES = {"Carlos Gomez": "Carlos Gómez", "Laura Martinez": "Laura Martínez", "Pedro Sanchez": "Pedro Sánchez"}
+
+
+def fix_seed_accents(db: Session) -> None:
+    """Pone las tildes a los reportes y nombres de ejemplo que ya estaban en la base."""
+    changed = False
+    for old, new in SEED_TEXT_FIXES.items():
+        for r in db.scalars(select(models.Report).where(models.Report.title == old)).unique().all():
+            r.title = new
+            changed = True
+        for r in db.scalars(select(models.Report).where(models.Report.description == old)).unique().all():
+            r.description = new
+            changed = True
+    for old, new in SEED_NAME_FIXES.items():
+        for u in db.scalars(select(models.User).where(models.User.full_name == old)).unique().all():
+            u.full_name = new
+            changed = True
+    if changed:
+        db.commit()
+
+
 def ensure_profesor(db: Session) -> None:
     """Crea (o actualiza la clave de) las cuentas del profesor: una administradora y una de vecino normal."""
     settings = get_settings()
@@ -687,6 +720,7 @@ def init_db(with_seed: bool = True) -> None:
         sync_pasto_barrios(db)
         ensure_alert_expiration(db)
         ensure_extra_incident_types(db)
+        fix_seed_accents(db)
         ensure_profesor(db)
     finally:
         db.close()

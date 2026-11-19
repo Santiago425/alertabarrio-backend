@@ -239,7 +239,7 @@ class AlertEngine:
         with self.lock:
             stack = self.status_stacks.get(report_id)
             if stack is None or len(stack) <= 1:
-                raise ValueError("No hay nada que deshacer: el reporte esta en su estado inicial")
+                raise ValueError("No hay nada que deshacer: el reporte está en su estado inicial")
             undone = stack.pop()
             current = stack.peek()
             item = self.items.get(report_id)

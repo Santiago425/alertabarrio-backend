@@ -50,22 +50,22 @@ def password_problems(password: str) -> List[str]:
     if len(password) < 8:
         problems.append("tener al menos 8 caracteres")
     if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
-        problems.append(f"tener maximo {MAX_PASSWORD_BYTES} bytes")
+        problems.append(f"tener máximo {MAX_PASSWORD_BYTES} bytes")
     if not re.search(r"[a-zñáéíóú]", password):
-        problems.append("tener una letra minuscula")
+        problems.append("tener una letra minúscula")
     if not re.search(r"[A-ZÑÁÉÍÓÚ]", password):
-        problems.append("tener una letra mayuscula")
+        problems.append("tener una letra mayúscula")
     if not re.search(r"\d", password):
-        problems.append("tener un numero")
+        problems.append("tener un número")
     if not re.search(r"[^\w\s]|_", password):
-        problems.append("tener un simbolo (por ejemplo * . ! #)")
+        problems.append("tener un símbolo (por ejemplo * . ! #)")
     return problems
 
 
 def validate_password_strength(password: str) -> str:
     problems = password_problems(password)
     if problems:
-        raise ValueError("La contrasena debe " + ", ".join(problems))
+        raise ValueError("La contraseña debe " + ", ".join(problems))
     return password
 
 
@@ -229,7 +229,7 @@ def _decode(token: str) -> dict:
     try:
         return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except jwt.PyJWTError:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token invalido o vencido")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Tu sesión venció. Inicia sesión de nuevo")
 
 
 def get_current_user(
@@ -237,13 +237,13 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     if credentials is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Debes iniciar sesion")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Debes iniciar sesión")
     payload = _decode(credentials.credentials)
     user = db.get(User, int(payload["sub"]))
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no encontrado o inactivo")
     if payload.get("tv", 0) != user.token_version:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "La sesion se cerro. Inicia sesion de nuevo")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "La sesión se cerró. Inicia sesión de nuevo")
     return user
 
 
