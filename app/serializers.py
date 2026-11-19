@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import models, schemas
-from .services.engine import ensure_aware
+from .services.engine import ensure_aware, engine
 
 
 def user_out(user: models.User) -> schemas.UserOut:
@@ -36,7 +36,16 @@ def confirmations_for(db: Session, report_ids: Iterable[int]) -> Dict[int, int]:
 
 
 def report_out(r: models.Report, confirmations: Optional[int] = None) -> schemas.ReportOut:
+    expires_at = None
+    expired = False
+    item = engine.get_item(r.id)
+    if item is not None and r.status in ("published", "verified"):
+        expires_at = engine.expires_at(item)
+        expired = not engine.is_live(item)
     return schemas.ReportOut(
+        published_at=ensure_aware(r.published_at) if r.published_at else None,
+        expires_at=expires_at,
+        expired=expired,
         id=r.id,
         title=r.title,
         description=r.description,

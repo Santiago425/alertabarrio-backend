@@ -23,7 +23,7 @@ peticiones en varios hilos.
 
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import select
@@ -65,6 +65,8 @@ class ReportItem:
     priority: float
     status: str
     created_at: datetime
+    incident_type_id: int = 0
+    published_at: Optional[datetime] = None
 
     def short(self) -> dict:
         return {"id": self.id, "title": self.title, "priority": self.priority, "status": self.status}
@@ -80,6 +82,8 @@ class ReportItem:
             priority=r.priority_score,
             status=r.status,
             created_at=ensure_aware(r.created_at),
+            incident_type_id=r.incident_type_id,
+            published_at=ensure_aware(r.published_at) if r.published_at else None,
         )
 
 
@@ -139,6 +143,8 @@ class AlertEngine:
         self.city_graph = Graph()
         self.neighborhood_catalog: DynamicArray[Tuple[str, int]] = DynamicArray()
         self.items: HashTable[int, ReportItem] = HashTable()  # id -> item
+        # tipo de incidente -> minutos que dura la alerta en el mapa (lo configura el admin)
+        self.type_durations: HashTable[int, int] = HashTable()
         self.dispatched_total = 0
         self.loaded = False
 
@@ -156,6 +162,9 @@ class AlertEngine:
             # catalogo ordenado por nombre (merge sort) para busqueda binaria
             for name, nid in merge_sort([(n.name.lower(), n.id) for n in neighborhoods], key=lambda x: x[0]):
                 self.neighborhood_catalog.append((name, nid))
+
+            for t in db.scalars(select(models.IncidentType)).all():
+                self.type_durations.put(t.id, t.duration_minutes or 0)
 
             for s in db.scalars(select(models.Subscription).order_by(models.Subscription.id)).all():
                 self.subscribers.get_or_create(s.neighborhood_id, LinkedList).push_back(s.user_id)
@@ -244,6 +253,27 @@ class AlertEngine:
             if item is not None:
                 self.moderation_queue.push(item)
 
+    # ========================================================= vencimiento
+    def set_type_duration(self, incident_type_id: int, minutes: int) -> None:
+        with self.lock:
+            self.type_durations.put(incident_type_id, minutes)
+
+    def expires_at(self, item: ReportItem) -> Optional[datetime]:
+        """Momento en que la alerta sale del mapa (publicacion + duracion del tipo)."""
+        minutes = self.type_durations.get(item.incident_type_id) or 0
+        if item.published_at is None or minutes <= 0:
+            return None  # 0 = no vence
+        return item.published_at + timedelta(minutes=minutes)
+
+    def is_live(self, item: ReportItem, now: Optional[datetime] = None) -> bool:
+        """Activa = publicada/verificada y todavia no vencida."""
+        end = self.expires_at(item)
+        return end is None or end > (now or datetime.now(timezone.utc))
+
+    def _live(self, feed: LinkedList) -> List[ReportItem]:
+        now = datetime.now(timezone.utc)
+        return [r for r in feed if self.is_live(r, now)]
+
     # ================================================================ feed
     def publish(self, report_id: int, reporter_id: int, message: str) -> int:
         """Agrega al feed del barrio y encola notificaciones. Devuelve cuantas encolo."""
@@ -251,6 +281,8 @@ class AlertEngine:
             item = self.items.get(report_id)
             if item is None:
                 return 0
+            if item.published_at is None:
+                item.published_at = datetime.now(timezone.utc)
             feed = self.zone_feeds.get_or_create(item.neighborhood_id, LinkedList)
             if feed.find(lambda r: r.id == report_id) is None:
                 feed.push_front(item)
@@ -267,26 +299,38 @@ class AlertEngine:
             if message:
                 self._notify_zone(item.neighborhood_id, report_id, message, exclude=None)
 
+    def refeed(self, report_id: int) -> None:
+        """Vuelve a poner la alerta en el feed de su barrio (deshacer un retiro), sin notificar."""
+        with self.lock:
+            item = self.items.get(report_id)
+            if item is None:
+                return
+            feed = self.zone_feeds.get_or_create(item.neighborhood_id, LinkedList)
+            if feed.find(lambda r: r.id == report_id) is None:
+                feed.push_front(item)
+
     def feed_ids(self, neighborhood_id: Optional[int], limit: int = 50) -> List[int]:
         with self.lock:
             if neighborhood_id is not None:
                 feed = self.zone_feeds.get(neighborhood_id)
-                return [r.id for r in feed.to_list(limit)] if feed else []
+                return [r.id for r in self._live(feed)[:limit]] if feed else []
             # Feed general: juntamos todas las listas y ordenamos con merge sort
             # (estable) por prioridad y luego por fecha, de mayor a menor.
             everything: List[ReportItem] = []
             for _, feed in self.zone_feeds.items():
-                everything.extend(feed)
+                everything.extend(self._live(feed))
             ordered = merge_sort(everything, key=lambda r: (r.priority, r.created_at.timestamp()), reverse=True)
             return [r.id for r in ordered[:limit]]
 
     def active_count_by_zone(self) -> Dict[int, int]:
         with self.lock:
-            return {nid: len(feed) for nid, feed in self.zone_feeds.items()}
+            counts = {nid: len(self._live(feed)) for nid, feed in self.zone_feeds.items()}
+            return {nid: c for nid, c in counts.items() if c}
 
     def active_severity_by_zone(self) -> Dict[int, int]:
         with self.lock:
-            return {nid: sum(r.severity for r in feed) for nid, feed in self.zone_feeds.items()}
+            sev = {nid: sum(r.severity for r in self._live(feed)) for nid, feed in self.zone_feeds.items()}
+            return {nid: v for nid, v in sev.items() if v}
 
     def ranking(self) -> List[Tuple[int, int]]:
         """Barrios ordenados por gravedad acumulada de alertas activas (quick sort)."""
@@ -367,7 +411,7 @@ class AlertEngine:
                         "load_factor": round(self.zone_feeds.load_factor, 3),
                     },
                     "feeds": {
-                        self.city_graph.label(nid): [r.short() for r in feed.to_list(10)]
+                        self.city_graph.label(nid): [r.short() for r in self._live(feed)[:10]]
                         for nid, feed in self.zone_feeds.items()
                     },
                 },

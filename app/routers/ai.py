@@ -23,7 +23,7 @@ from ..services.engine import engine, ensure_aware
 from ..services import ai_client
 from ..services.geo import nearest_neighborhood
 from ..services.report_service import to_local
-from .routes import compute_safe_route
+from .routes import compute_safe_route, remember_route
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
@@ -318,7 +318,11 @@ def report_draft(
     El barrio sale de la ubicacion del celular (GPS), salvo que nombre otro
     barrio; si no hay ninguno, se usa su barrio registrado. El vecino solo confirma.
     """
-    types = db.scalars(select(models.IncidentType).order_by(models.IncidentType.severity_level.desc())).all()
+    types = db.scalars(
+        select(models.IncidentType)
+        .where(models.IncidentType.is_active.is_(True))
+        .order_by(models.IncidentType.severity_level.desc())
+    ).all()
     payload = {
         "text": data.text.strip(),
         "city": get_settings().city,
@@ -395,6 +399,8 @@ def voice_route(
         route = compute_safe_route(db, origin_id, destination_id)
     except HTTPException as exc:
         return schemas.VoiceRouteOut(available=True, model=model, message=str(exc.detail), origin_source=source)
+    if user is not None:
+        remember_route(db, user, origin_id, destination_id)  # queda en "Mis rutas"
     names = " → ".join(n.name for n in route.safe_path)
     return schemas.VoiceRouteOut(
         available=True,

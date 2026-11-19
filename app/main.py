@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import SessionLocal
-from .routers import ai, auth, catalog, general, moderation, notifications, reports, routes
+from .routers import admin, ai, auth, catalog, general, moderation, notifications, reports, routes
 from .seed import init_db
 from .services import ai_client
 from .services.engine import engine
@@ -74,7 +74,7 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-for r in (general, auth, catalog, reports, moderation, notifications, routes, ai):
+for r in (general, auth, catalog, reports, moderation, notifications, routes, ai, admin):
     app.include_router(r.router)
 
 

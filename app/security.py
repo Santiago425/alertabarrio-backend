@@ -263,3 +263,9 @@ def require_moderator(user: User = Depends(get_current_user)) -> User:
     if user.role.name not in ("moderator", "admin"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo moderadores pueden hacer esto")
     return user
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role.name != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo el administrador puede configurar las alertas")
+    return user

@@ -206,7 +206,8 @@ def test_city_is_pasto_and_stats(client):
     assert {h["city"] for h in hoods} == {"Pasto"} and any(h["name"] == "Centro" for h in hoods)
     stats = client.get("/api/v1/stats").json()
     assert stats["total_reports"] > 100 and len(stats["timeline"]) == 14
-    assert stats["active_alerts"] == stats["by_status"]["published"] + stats["by_status"]["verified"]
+    # activas = publicadas que no han vencido; las vencidas quedan en el historial
+    assert stats["active_alerts"] + stats["expired_alerts"] == stats["by_status"]["published"] + stats["by_status"]["verified"]
 
 
 def test_migrate_existing_bogota_database_to_pasto(tmp_path):
@@ -444,3 +445,102 @@ def test_voice_route_from_gps(client, ai_up):
     assert body["origin_source"] == "gps"
     assert body["route"]["from_neighborhood"]["name"] == "Torobajo" and body["route"]["to_neighborhood"]["name"] == "Centro"
     assert "Tu ruta segura" in body["message"]
+
+
+# ------------------------------------------------ correcciones de la entrega
+def test_admin_configures_alert_types(client):
+    admin = login(client, "admin@alertabarrio.co")
+    vecina = login(client, "ana@alertabarrio.co")
+    # el usuario normal no puede configurar
+    assert client.get("/api/v1/admin/incident-types", headers=vecina).status_code == 403
+    r = client.post(
+        "/api/v1/admin/incident-types",
+        json={"name": "Accidente de moto", "severity_level": 3, "color": "#0ea5e9", "duration_minutes": 60},
+        headers=admin,
+    )
+    assert r.status_code == 201, r.text
+    moto = r.json()
+    assert moto["code"] == "accidente_de_moto" and moto["duration_minutes"] == 60
+    assert any(t["id"] == moto["id"] for t in client.get("/api/v1/incident-types").json())
+    # renombrar un tipo
+    robo = next(t for t in client.get("/api/v1/admin/incident-types", headers=admin).json() if t["code"] == "armed_robbery")
+    r = client.patch(f"/api/v1/admin/incident-types/{robo['id']}", json={"name": "Atraco con armas"}, headers=admin)
+    assert r.json()["name"] == "Atraco con armas"
+    # nombre repetido
+    assert client.patch(f"/api/v1/admin/incident-types/{moto['id']}", json={"name": "atraco con armas"}, headers=admin).status_code == 409
+    # tipo sin reportes se borra; tipo con reportes solo se desactiva
+    assert client.delete(f"/api/v1/admin/incident-types/{moto['id']}", headers=admin).json()["deleted"] is True
+    r = client.delete(f"/api/v1/admin/incident-types/{robo['id']}", headers=admin).json()
+    assert r["deactivated"] is True
+    assert all(t["id"] != robo["id"] for t in client.get("/api/v1/incident-types").json())
+    client.patch(f"/api/v1/admin/incident-types/{robo['id']}", json={"is_active": True}, headers=admin)
+
+
+def test_alert_expires_but_stays_in_history(client, ai_up):
+    admin = login(client, "admin@alertabarrio.co")
+    vecina = login(client, "ana@alertabarrio.co")
+    t = client.post(
+        "/api/v1/admin/incident-types",
+        json={"name": "Choque de prueba", "severity_level": 2, "duration_minutes": 60},
+        headers=admin,
+    ).json()
+    hood = client.get("/api/v1/neighborhoods/search", params={"name": "Centro"}).json()
+    created = client.post(
+        "/api/v1/reports",
+        json={
+            "title": "Choque en la esquina",
+            "description": "Dos carros chocaron frente al parque",
+            "incident_type_id": t["id"],
+            "neighborhood_id": hood["id"],
+            "latitude": hood["latitude"],
+            "longitude": hood["longitude"],
+        },
+        headers=vecina,
+    ).json()
+    rid = created["report"]["id"]
+    pub = client.post(f"/api/v1/moderation/reports/{rid}/publish", json={}, headers=admin).json()["report"]
+    assert pub["expires_at"] and pub["expired"] is False
+    assert rid in [r["id"] for r in client.get("/api/v1/reports/map").json()]
+    # el admin baja la duracion a 0 -> no vence; luego la deja vencida moviendo published_at
+    from datetime import datetime, timedelta, timezone
+    from app.services.engine import engine
+
+    engine.get_item(rid).published_at = datetime.now(timezone.utc) - timedelta(hours=2)
+    assert rid not in [r["id"] for r in client.get("/api/v1/reports/map").json()]
+    hist = client.get(f"/api/v1/reports/{rid}").json()
+    assert hist["expired"] is True and hist["status"] == "published"
+    # subir la duracion la vuelve a mostrar
+    client.patch(f"/api/v1/admin/incident-types/{t['id']}", json={"duration_minutes": 600}, headers=admin)
+    assert rid in [r["id"] for r in client.get("/api/v1/reports/map").json()]
+    # el admin la retira del mapa (falsa) y puede deshacerlo
+    client.post(f"/api/v1/moderation/reports/{rid}/withdraw", json={}, headers=admin)
+    assert rid not in [r["id"] for r in client.get("/api/v1/reports/map").json()]
+    client.post(f"/api/v1/moderation/reports/{rid}/undo", headers=admin)
+    assert rid in [r["id"] for r in client.get("/api/v1/reports/map").json()]
+    # un vecino no puede retirar alertas
+    assert client.post(f"/api/v1/moderation/reports/{rid}/withdraw", json={}, headers=vecina).status_code == 403
+
+
+def test_zone_stats_by_month(client):
+    r = client.get("/api/v1/stats/zones", params={"months": 6})
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["by_month"]) == 6 and len(data["by_hour"]) == 24 and len(data["by_weekday"]) == 7
+    assert data["total"] == sum(m["total"] for m in data["by_month"])
+    assert data["top_neighborhoods"]
+
+
+def test_safe_route_history(client):
+    vecina = login(client, "ana@alertabarrio.co")
+    a = client.get("/api/v1/neighborhoods/search", params={"name": "Centro"}).json()["id"]
+    b = client.get("/api/v1/neighborhoods/search", params={"name": "Torobajo"}).json()["id"]
+    client.get("/api/v1/routes/safe", params={"from_id": b, "to_id": a}, headers=vecina)
+    client.get("/api/v1/routes/safe", params={"from_id": b, "to_id": a}, headers=vecina)
+    hist = client.get("/api/v1/routes/history", headers=vecina).json()
+    row = next(h for h in hist if h["from_neighborhood"]["id"] == b and h["to_neighborhood"]["id"] == a)
+    assert row["times_used"] == 2
+    r = client.patch(f"/api/v1/routes/history/{row['id']}", json={"label": "De la U a mi casa"}, headers=vecina)
+    assert r.json()["label"] == "De la U a mi casa"
+    otro = login(client, "carlos@alertabarrio.co")
+    assert client.delete(f"/api/v1/routes/history/{row['id']}", headers=otro).status_code == 404
+    assert client.delete(f"/api/v1/routes/history/{row['id']}", headers=vecina).json()["deleted"] is True

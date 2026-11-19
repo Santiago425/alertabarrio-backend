@@ -45,6 +45,21 @@ tests/            test_structures.py, test_api.py
 | POST | `/api/v1/ai/route` | Vigía: "estoy en la U, necesito ir al centro" → Graph + Dijkstra desde la ubicación del vecino |
 | GET | `/api/v1/neighborhoods/nearest?lat=&lng=` | barrio al que pertenece un punto del mapa (haversine) |
 | GET | `/api/v1/ds/state` | estado interno de todas las estructuras |
+| GET/POST/PATCH/DELETE | `/api/v1/admin/incident-types` | **Configuración de alertas** (solo admin): crear tipos, renombrarlos, gravedad, color y duración en el mapa |
+| POST | `/api/v1/moderation/reports/{id}/withdraw` | el admin retira del mapa una alerta publicada (queda en el historial) |
+| GET | `/api/v1/stats/zones?months=&neighborhood_id=&comuna=&incident_type_id=` | estadísticas por mes, barrio, comuna, hora y día (incluye alertas vencidas) |
+| GET/PATCH/DELETE | `/api/v1/routes/history` | historial de rutas seguras del usuario (se guardan solas al consultarlas) |
+
+## Vencimiento de alertas
+
+Cada tipo de alerta tiene una **duración** (`incident_types.duration_minutes`, la configura el admin). Desde que el moderador publica la alerta (`reports.published_at`) empieza a contar; al vencer **sale del mapa, del feed y de la ruta segura**, pero el reporte sigue en la base de datos con su estado, así que cuenta para el historial y las estadísticas. Si el admin cambia la duración, aplica de una a las alertas que ya están publicadas. Duración `0` = no vence.
+
+## Moderación
+
+1. El vecino reporta → queda **pendiente** (nadie más lo ve).
+2. El administrador/moderador lo revisa: **Publicar** (sale en el mapa y avisa a los suscritos) o **Rechazar** (no se publica).
+3. Una alerta publicada se puede **Retirar** si era falsa; cualquier decisión se puede **Deshacer** (pila).
+4. El usuario normal **no puede borrar ni editar** alertas: solo reportar y confirmar ("Yo también lo vi").
 
 ## Seguridad de las contraseñas
 
