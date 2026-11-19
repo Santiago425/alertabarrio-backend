@@ -91,9 +91,9 @@ BOGOTA_TO_PASTO = {
 
 INCIDENT_TYPES = [
     ("armed_robbery", "Robo armado", 5, "#b91c1c"),
-    ("assault", "Agresion o rina", 4, "#dc2626"),
+    ("assault", "Agresión o riña", 4, "#dc2626"),
     ("home_burglary", "Robo a vivienda", 4, "#ea580c"),
-    ("vehicle_theft", "Robo de vehiculo", 4, "#f97316"),
+    ("vehicle_theft", "Robo de vehículo", 4, "#f97316"),
     ("theft", "Hurto", 3, "#f59e0b"),
     ("drug_dealing", "Expendio de drogas", 3, "#9333ea"),
     ("vandalism", "Vandalismo", 2, "#2563eb"),
@@ -622,6 +622,11 @@ def ensure_extra_incident_types(db: Session) -> int:
     rows = db.scalars(select(models.IncidentType)).all()
     by_code = {t.code: t for t in rows}
     names = {_norm(t.name): t for t in rows}
+    # tildes en los nombres por defecto (solo si el admin no los ha cambiado)
+    fixes = {"Agresion o rina": "Agresión o riña", "Robo de vehiculo": "Robo de vehículo"}
+    for t in rows:
+        if t.name in fixes:
+            t.name = fixes[t.name]
     for t in rows:
         if not t.category:
             t.category = BASE_CATEGORY.get(t.code, "Otros")
