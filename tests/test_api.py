@@ -397,6 +397,13 @@ def test_cuenta_profesor(client, monkeypatch):
     assert r.status_code == 200, r.text
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}).json()
     assert me["role"] == "admin"
+    # segunda cuenta: vecino normal, entra con el switch "Usuario"
+    r = client.post(
+        "/api/v1/auth/login",
+        json={"email": "vecino@alertabarrio.co", "password": "Profe.Pasto26", "account_type": "user"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["user"]["role"] == "citizen"
 
 
 def test_nearest_neighborhood(client):

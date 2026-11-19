@@ -542,20 +542,30 @@ def ensure_alert_expiration(db: Session) -> None:
 
 
 def ensure_profesor(db: Session) -> None:
-    """Crea (o actualiza la clave de) la cuenta del profesor con rol admin."""
+    """Crea (o actualiza la clave de) las cuentas del profesor: una administradora y una de vecino normal."""
     settings = get_settings()
     if not settings.profesor_password:
         return
-    admin = db.scalar(select(models.Role).where(models.Role.name == "admin"))
-    if admin is None:
-        return
-    email = settings.profesor_email.lower()
-    user = db.scalar(select(models.User).where(models.User.email == email))
-    if user is None:
-        centro = db.scalar(select(models.Neighborhood).where(models.Neighborhood.name == "Centro"))
-        user = models.User(full_name="Profesor", email=email, role=admin, neighborhood=centro)
-        db.add(user)
-    user.password_hash = hash_password(settings.profesor_password)
+    centro = db.scalar(select(models.Neighborhood).where(models.Neighborhood.name == "Centro"))
+    accounts = [
+        (settings.profesor_email, "Profesor", "admin"),
+        (settings.profesor_user_email, "Profesor (vecino)", "citizen"),
+    ]
+    password_hash = hash_password(settings.profesor_password)
+    for email, full_name, role_name in accounts:
+        role = db.scalar(select(models.Role).where(models.Role.name == role_name))
+        if role is None or not email:
+            continue
+        email = email.lower()
+        user = db.scalar(select(models.User).where(models.User.email == email))
+        if user is None:
+            user = models.User(full_name=full_name, email=email, role=role, neighborhood=centro, password_hash=password_hash)
+            db.add(user)
+            db.flush()
+            if role_name == "citizen" and centro is not None:
+                # suscrito al Centro para que le lleguen las alertas de su barrio
+                db.add(models.Subscription(user_id=user.id, neighborhood_id=centro.id))
+        user.password_hash = password_hash
     db.commit()
 
 
