@@ -1,21 +1,75 @@
-# Los planes gratis de Render "duermen" el servicio tras 15 min sin uso.
-# Este workflow lo despierta cada 10 minutos para que el dia de la
-# sustentacion no toque decir "profe, espere que el servidor esta dormido".
-# Configurar en Settings > Secrets and variables > Actions > Variables:
-#   BACKEND_URL = https://tu-backend.onrender.com
-#   AI_URL      = https://tu-ia.onrender.com
+# Los planes gratis de Render "duermen" el servicio tras 15 min sin visitas.
+# Este workflow hace ping al backend y a la IA cada 10 minutos dentro de un
+# horario (hora de Colombia) para que no se duerman.
+#
+# Por qué no basta con un cron cada 10 min: GitHub corre los "schedule" cuando
+# puede, y en la práctica los lanzaba cada 4 a 8 horas. Por eso cada corrida
+# se queda viva ~5 h haciendo ping, y al terminar lanza la siguiente.
+# El "schedule" queda solo de respaldo por si la cadena se corta.
+#
+# Ojo con las horas de Render: el plan gratis da 750 horas al mes para TODO el
+# workspace. Dos servicios despiertos 24/7 gastan ~1440 h y Render apagaría
+# todos los servicios gratis hasta el mes siguiente. Por eso hay horario.
+#
+# Variables (Settings > Secrets and variables > Actions > Variables):
+#   BACKEND_URL      = https://alertabarrio-api.onrender.com
+#   AI_URL           = https://alertabarrio-ai.onrender.com
+#   KEEPALIVE_DESDE  = hora de inicio, 0-23 (por defecto 7)
+#   KEEPALIVE_HASTA  = hora de fin, 0-24 (por defecto 21)
+#   KEEPALIVE_DIAS   = días, 1=lunes ... 7=domingo (por defecto "1 2 3 4 5")
 name: Mantener servidores despiertos
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      BACKEND_URL: ${{ vars.BACKEND_URL }}
+      AI_URL: ${{ vars.AI_URL }}
+      DESDE: ${{ vars.KEEPALIVE_DESDE || '7' }}
+      HASTA: ${{ vars.KEEPALIVE_HASTA || '21' }}
+      DIAS: ${{ vars.KEEPALIVE_DIAS || '1 2 3 4 5' }}
     steps:
-      - name: Ping backend e IA
+      - name: Ping cada 10 minutos dentro del horario
         run: |
-          [ -n "${{ vars.BACKEND_URL }}" ] && curl -fsS --max-time 60 "${{ vars.BACKEND_URL }}/api/v1/hello" || true
-          [ -n "${{ vars.AI_URL }}" ] && curl -fsS --max-time 60 "${{ vars.AI_URL }}/health" || true
+          ping_url() {
+            [ -z "$1" ] && return
+            if curl -fsS --max-time 90 --retry 2 --retry-delay 10 -o /dev/null -w "%{http_code} en %{time_total}s" "$1"; then
+              echo "  <- $1"
+            else
+              echo "::warning::No respondió $1"
+            fi
+          }
+          fin=$(( $(date +%s) + 320 * 60 ))
+          while [ "$(date +%s)" -lt "$fin" ]; do
+            hora=$(TZ=America/Bogota date +%-H)
+            dia=$(TZ=America/Bogota date +%u)
+            ahora=$(TZ=America/Bogota date '+%a %H:%M')
+            if echo " $DIAS " | grep -q " $dia " && [ "$hora" -ge "$DESDE" ] && [ "$hora" -lt "$HASTA" ]; then
+              echo "[$ahora] ping"
+              ping_url "${BACKEND_URL:+$BACKEND_URL/api/v1/hello}"
+              ping_url "${AI_URL:+$AI_URL/health}"
+            else
+              echo "[$ahora] fuera de horario, no se hace ping"
+            fi
+            sleep 600
+          done
+
+      - name: Lanzar la siguiente corrida
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run keep-alive.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
